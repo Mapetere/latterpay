@@ -556,6 +556,7 @@ def webhook():
             "_Type *cancel* to exit_",
             phone
         )
+        
 
     elif session["step"] == "note":
         session["data"]["note"] = msg
