@@ -1,5 +1,7 @@
 from flask import Flask, request
 from dotenv import load_dotenv
+from apscheduler.schedulers.background import BackgroundScheduler
+import atexit
 import os
 from pygwan import WhatsApp
 from datetime import datetime, timedelta
@@ -7,10 +9,15 @@ import json
 import pandas as pd
 from fpdf import FPDF
 import tempfile
+import requests
+
 
 load_dotenv()
 
 app = Flask(__name__)
+
+with open("test.pdf", "wb") as f:
+    f.write(b"%PDF-1.4\n%Tiny Test\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF")
 
 whatsapp = WhatsApp(
     token=os.getenv("WHATSAPP_TOKEN"),
@@ -29,6 +36,61 @@ PAYMENTS_FILE = "donation_payment.json"
 if not os.path.exists(PAYMENTS_FILE):
     with open(PAYMENTS_FILE, 'w') as f:
         json.dump([], f)
+
+#Daily/weekly auto-reports
+
+def setup_scheduled_reports():
+    """Configure automatic daily/weekly reports"""
+    scheduler = BackgroundScheduler(daemon=True)
+    
+    # Daily report at 9am
+    scheduler.add_job(
+        send_payment_report_to_finance,
+        'cron',
+        day_of_week='mon-fri',
+        hour=9,
+        minute=0,
+        args=["pdf"]  # Send PDF by default
+    )
+    
+    # Weekly summary every Monday at 10am
+    scheduler.add_job(
+        lambda: send_payment_report_to_finance("excel"),  # Excel for weekly
+        'cron',
+        day_of_week='mon',
+        hour=10,
+        minute=0
+    )
+    
+    scheduler.start()
+    
+    # Shut down the scheduler when exiting the app
+    atexit.register(lambda: scheduler.shutdown())
+
+#excel export option
+def generate_excel_report():
+    """Generate Excel report of all payments"""
+    try:
+        with open(PAYMENTS_FILE, 'r') as f:
+            payments = json.load(f)
+            
+        if not payments:
+            return None
+            
+        df = pd.DataFrame(payments)
+        
+        # Create temporary file
+        temp_file = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
+        excel_path = temp_file.name
+        df.to_excel(excel_path, index=False)
+        temp_file.close()
+        
+        return excel_path
+        
+    except Exception as e:
+        print(f"Error generating Excel report: {e}")
+        return None
+
 
 def record_payment(payment_data):
     """Record a new payment in the payments file"""
@@ -155,36 +217,19 @@ def generate_payment_report():
         print(f"Error generating report: {e}")
         return None
 
-def send_payment_report_to_finance():
-    """Generate and send the payment report to finance director"""
-    pdf_path = generate_payment_report()
-    if not pdf_path:
-        return
-        
+def send_payment_report_to_finance(report_type="pdf"):
     finance_phone = os.getenv("FINANCE_PHONE")
-    if not finance_phone:
+    file_path = generate_payment_report()
+
+    if not file_path:
+        print("❌ No PDF was generated.")
         return
+
+    send_pdf(finance_phone, file_path,"🧾 Church Donation Report")
+    os.unlink(file_path)  # cleanup
+
         
-    try:
-        # Send message with PDF
-        whatsapp.send_message(
-            "📊 *New Donation Report* 📊\n"
-            "Here's the latest donation report organized by congregation.",
-            finance_phone
-        )
-        
-        # Send the PDF document
-        whatsapp.send_document(
-            document_path=pdf_path,
-            phone=finance_phone,
-            caption="Donation Payments Report"
-        )
-        
-        # Clean up the temporary file
-        os.unlink(pdf_path)
-        
-    except Exception as e:
-        print(f"Error sending report: {e}")
+
 
 def handle_admin_approval(admin_phone, msg):
     if msg.lower() == "cancel":
@@ -307,6 +352,45 @@ def notify_finance_director(d):
     )
     whatsapp.send_message(msg, finance_phone)
 
+
+def send_pdf(phone, file_path, caption):
+    access_token = os.getenv("WHATSAPP_TOKEN")
+    phone_number_id = os.getenv("PHONE_NUMBER_ID")
+
+    url = f"https://graph.facebook.com/v18.0/{phone_number_id}/media"
+
+    # Upload media
+    with open(file_path, 'rb') as f:
+        files = {'file': (os.path.basename(file_path), f, 'application/pdf')}
+        data = {
+            'messaging_product': 'whatsapp'
+        }
+        headers = {
+            'Authorization': f'Bearer {access_token}'
+        }
+        response = requests.post(url, files=files, data=data, headers=headers)
+        print(response.json())
+        media_id = response.json().get("id")
+
+    # Send document using media_id
+    if media_id:
+        send_url = f"https://graph.facebook.com/v18.0/{phone_number_id}/messages"
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": phone,
+            "type": "document",
+            "document": {
+                "id": media_id,
+                "caption": caption
+            }
+        }
+        headers['Content-Type'] = 'application/json'
+        resp = requests.post(send_url, json=payload, headers=headers)
+        print(resp.json())
+    else:
+        print("❌ Failed to upload media.")    
+
+
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
     if request.method == "GET":
@@ -314,154 +398,192 @@ def webhook():
             return request.args.get("hub.challenge")
         return "Invalid verify token", 403
 
+    print("[WEBHOOK] POST triggered")
     data = request.get_json()
-    print(f"Received data: {data}")  # Debug log
+    print(f"Received data: {json.dumps(data, indent=2)}")  # Better debug output
     
-    if whatsapp.is_message(data):
-        phone = whatsapp.get_mobile(data)
-        name = whatsapp.get_name(data)
-        msg = whatsapp.get_message(data).lower().strip()  # Clean the message
-        print(f"Message from {name} ({phone}): {msg}")  # Debug log
+    if not whatsapp.is_message(data):
+        return "ok"  # Not a message we care about
 
-        # Check for timeout first
-        if check_session_timeout(phone):
-            return "ok"
-        
-        # Check if message is from admin
-        if phone == os.getenv("ADMIN_PHONE"):
-            handle_admin_approval(phone, msg)
-            return "ok"
-        
-        # Check for cancellation
-        if msg == "cancel":
-            cancel_session(phone)
-            return "ok"
+    phone = whatsapp.get_mobile(data)
+    name = whatsapp.get_name(data)
+    msg = whatsapp.get_message(data).lower().strip()
 
-        # Initialize session if it doesn't exist
-        if phone not in sessions:
-            sessions[phone] = {
-                "step": "name", 
-                "data": {},
-                "last_active": datetime.now()
-            }
+    # 🧑🏾‍💼 Admin-only commands (handle early and exit)
+    if phone == os.getenv("ADMIN_PHONE"):
+        if msg == "/admin":
+            whatsapp.send_message("⚠️ You're the admin, but continuing as a donor. Type /admin to see admin commands.", phone)
             whatsapp.send_message(
-                f"Hi {name}! Welcome to the Latter Rain Church Donation Bot.\n"
-                "Kindly enter your *full name*\n\n"
-                "_You can type *cancel* at any time to exit._", 
+                "👩🏾‍💼 *Admin Panel*\n"
+                "Use the following commands:\n"
+                "• /report pdf or /report excel\n"
+                "• /approve <user> <duration>\n"
+                "• /session — View current session state",
                 phone
             )
             return "ok"
 
-        # Update activity timestamp
-        sessions[phone]["last_active"] = datetime.now()
-        session = sessions[phone]
+        elif msg == "/report pdf":
+            send_payment_report_to_finance("pdf")
+            whatsapp.send_message("✅ PDF report sent to finance.", phone)
+            return "ok"
 
-        # Handle session steps
-        if session["step"] == "name":
-            session["data"]["name"] = msg
-            session["step"] = "amount"
+        elif msg == "/report excel":
+            send_payment_report_to_finance("excel")
+            whatsapp.send_message("✅ Excel report sent to finance.", phone)
+            return "ok"
+
+        elif msg.startswith("/approve") or msg.startswith("/session"):
+            handle_admin_approval(phone, msg)
+            return "ok"
+
+        elif msg == "/session":
+            whatsapp.send_message(f"📦 Current session:\n```{json.dumps(sessions.get(phone), indent=2)}```", phone)
+            return "ok"
+
+    
+    print(f"Message from {name} ({phone}): {msg}")
+
+    # Check for timeout first
+    if check_session_timeout(phone):
+        return "ok"
+    
+    
+    # Handle regular user messages
+    if msg == "cancel":
+        cancel_session(phone)
+        return "ok"
+    
+    
+
+    # Initialize session if it doesn't exist
+    if phone not in sessions:
+        sessions[phone] = {
+            "step": "name", 
+            "data": {},
+            "last_active": datetime.now()
+        }
+        whatsapp.send_message(
+            f"Hi {name}! Welcome to the Latter Rain Church Donation Bot.\n"
+            "Kindly enter your *full name*\n\n"
+            "_You can type *cancel* at any time to exit._", 
+            phone
+        )
+        return "ok"
+    
+    # Update activity timestamp
+    sessions[phone]["last_active"] = datetime.now()
+    session = sessions[phone]
+
+    # Handle session steps
+    if session["step"] == "name":
+        session["data"]["name"] = msg
+        session["step"] = "amount"
+        whatsapp.send_message(
+            "💰 *How much would you like to donate?*\n"
+            "Enter amount (e.g. 5000)\n\n"
+            "_Type *cancel* to exit_",
+            phone
+        )
+
+
+    elif session["step"] == "amount":
+        try:
+            # Validate it's a number
+            float(msg)
+            session["data"]["amount"] = msg
+            session["step"] = "donation_type"
             whatsapp.send_message(
-                "💰 *How much would you like to donate?*\n"
-                "Enter amount (e.g. 5000)\n\n"
+                "🙏🏾 *Please choose the purpose of your donation:*\n\n"
+                f"{get_donation_menu()}\n\n"
+                "_Reply with the number (1-4)_\n"
+                "_Type *cancel* to exit_",
+                phone
+            )
+        except ValueError:
+            whatsapp.send_message(
+                "❗*Invalid Amount*\n"
+                "Please enter a valid number (e.g. 5000)\n\n"
                 "_Type *cancel* to exit_",
                 phone
             )
 
-        elif session["step"] == "amount":
-            try:
-                # Validate it's a number
-                float(msg)
-                session["data"]["amount"] = msg
-                session["step"] = "donation_type"
-                whatsapp.send_message(
-                    "🙏🏾 *Please choose the purpose of your donation:*\n\n"
-                    f"{get_donation_menu()}\n\n"
-                    "_Reply with the number (1-4)_\n"
-                    "_Type *cancel* to exit_",
-                    phone
-                )
-            except ValueError:
-                whatsapp.send_message(
-                    "❗*Invalid Amount*\n"
-                    "Please enter a valid number (e.g. 5000)\n\n"
-                    "_Type *cancel* to exit_",
-                    phone
-                )
-
-        elif session["step"] == "donation_type":
-            if msg in ["1", "2", "3"]:
-                session["data"]["donation_type"] = donation_types[int(msg)-1]
-                session["step"] = "region"
-                whatsapp.send_message(
-                    "🌍 *Congregation Name*:\n"
-                    "Please share your congregation\n\n"
-                    "_Type *cancel* to exit_",
-                    phone
-                )
-            elif msg == "4":
-                session["step"] = "other_donation_details"
-                whatsapp.send_message(
-                    "✏️ *New Donation Purpose*:\n"
-                    "Describe what this donation is for\n\n"
-                    "_Example: \"Building Fund\" or \"Pastoral Support\"_\n"
-                    "_Type *cancel* to exit_",
-                    phone
-                )
-            else:
-                whatsapp.send_message(
-                    "❌ *Invalid Selection*\n"
-                    "Please choose:\n\n"
-                    f"{get_donation_menu()}\n\n"
-                    "_Type *cancel* to exit_",
-                    phone
-                )
-
-        elif session["step"] == "other_donation_details":
-            session["data"]["donation_type"] = f"Other: {msg}"
-            session["data"]["custom_donation_request"] = msg
+    elif session["step"] == "donation_type":
+        if msg in ["1", "2", "3"]:
+            session["data"]["donation_type"] = donation_types[int(msg)-1]
             session["step"] = "region"
-            notify_admin_for_approval(phone, msg)
             whatsapp.send_message(
                 "🌍 *Congregation Name*:\n"
                 "Please share your congregation\n\n"
-                "_Note: Your custom donation type has been submitted for approval._ "
-                "_We'll notify you once it's approved for future use._",
+                "_Type *cancel* to exit_",
                 phone
             )
-
-        elif session["step"] == "region":
-            session["data"]["region"] = msg
-            session["step"] = "note"
+        elif msg == "4":
+            session["step"] = "other_donation_details"
             whatsapp.send_message(
-                "📝 *Additional Notes*:\n"
-                "Any extra notes for the finance director?\n\n"
+                "✏️ *New Donation Purpose*:\n"
+                "Describe what this donation is for\n\n"
+                "_Example: \"Building Fund\" or \"Pastoral Support\"_\n"
+                "_Type *cancel* to exit_",
+                phone
+            )
+        else:
+            whatsapp.send_message(
+                "❌ *Invalid Selection*\n"
+                "Please choose:\n\n"
+                f"{get_donation_menu()}\n\n"
                 "_Type *cancel* to exit_",
                 phone
             )
 
-        elif session["step"] == "note":
-            session["data"]["note"] = msg
-            session["step"] = "done"
-            summary = session["data"]
+    elif session["step"] == "other_donation_details":
+        session["data"]["donation_type"] = f"Other: {msg}"
+        session["data"]["custom_donation_request"] = msg
+        session["step"] = "region"
+        notify_admin_for_approval(phone, msg)
+        whatsapp.send_message(
+            "🌍 *Congregation Name*:\n"
+            "Please share your congregation\n\n"
+            "_Note: Your custom donation type has been submitted for approval._ "
+            "_We'll notify you once it's approved for future use._",
+            phone
+        )
 
-            record_payment(summary)  # Record the payment
-            confirm_message = (
-                f"✅ *Thank you {summary['name']}!*\n\n"
-                f"💰 *Amount:* {summary['amount']}\n"
-                f"📌 *Type:* {summary['donation_type']}\n"
-                f"🌍 *Congregation:* {summary['region']}\n"
-                f"📝 *Note:* {summary['note']}\n\n"
-                "_We will now send a payment link and notify the finance director after payment is complete._"
-            )
-            whatsapp.send_message(confirm_message, phone)
-            
-            send_payment_report_to_finance()
+    elif session["step"] == "region":
+        session["data"]["region"] = msg
+        session["step"] = "note"
+        whatsapp.send_message(
+            "📝 *Additional Notes*:\n"
+            "Any extra notes for the finance director?\n\n"
+            "_Type *cancel* to exit_",
+            phone
+        )
 
-            del sessions[phone]  # Clear the session
+    elif session["step"] == "note":
+        session["data"]["note"] = msg
+        session["step"] = "done"
+        summary = session["data"]
+
+        record_payment(summary)  # Record the payment
+        confirm_message = (
+            f"✅ *Thank you {summary['name']}!*\n\n"
+            f"💰 *Amount:* {summary['amount']}\n"
+            f"📌 *Type:* {summary['donation_type']}\n"
+            f"🌍 *Congregation:* {summary['region']}\n"
+            f"📝 *Note:* {summary['note']}\n\n"
+            "_We will now send a payment link and notify the finance director after payment is complete._"
+        )
+        
+        whatsapp.send_message(confirm_message, phone)
+        send_payment_report_to_finance("pdf")
+
+        del sessions[phone]  # Clear the session
 
     return "ok"
 
 if __name__ == "__main__":
-    # Clean up expired types on startup
-    cleanup_expired_donation_types()
-    app.run(port=5000, debug=True)
+        # Clean up expired types on startup
+        cleanup_expired_donation_types()
+        setup_scheduled_reports()
+        app.run(port=5000, debug=True)
+        
