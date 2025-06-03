@@ -4,6 +4,9 @@ import os
 from pygwan import WhatsApp
 from datetime import datetime, timedelta
 import json
+import pandas as pd
+from fpdf import FPDF
+import tempfile
 
 load_dotenv()
 
@@ -20,6 +23,34 @@ donation_types = ["Monthly Contributions", "August Conference", "Youth Conferenc
 donation_types.append("Other")
 
 CUSTOM_TYPES_FILE = "custom_donation_types.json"
+PAYMENTS_FILE = "donation_payment.json"
+
+#Intialize payments file if it doesn't exist
+if not os.path.exists(PAYMENTS_FILE):
+    with open(PAYMENTS_FILE, 'w') as f:
+        json.dump([], f)
+
+def record_payment(payment_data):
+    """Record a new payment in the payments file"""
+    try:
+        with open(PAYMENTS_FILE, 'r') as f:
+            payments = json.load(f)
+        
+        payments.append({
+            "name": payment_data["name"],
+            "amount": float(payment_data["amount"]),
+            "congregation": payment_data["region"],
+            "purpose": payment_data["donation_type"],
+            "date": datetime.now().isoformat(),
+            "note": payment_data.get("note", "")
+        })
+        
+        with open(PAYMENTS_FILE, 'w') as f:
+            json.dump(payments, f)
+        
+        print("Payment recorded successfully.")
+    except Exception as e:
+        print(f"Error recording payment: {e}")
 
 # Initialize custom donation types from file if it doesn't exist
 if not os.path.exists(CUSTOM_TYPES_FILE):
@@ -57,6 +88,103 @@ def notify_admin_for_approval(user_phone, donation_description):
         f"/approve {user_phone} 1year"
     )
     whatsapp.send_message(approval_msg, admin_phone)
+
+
+def generate_payment_report():
+    """Generate a PDF report of all payments grouped by congregation"""
+    try:
+        with open(PAYMENTS_FILE, 'r') as f:
+            payments = json.load(f)
+        
+        if not payments:
+            return None
+            
+        # Create DataFrame and group by congregation
+        df = pd.DataFrame(payments)
+        grouped = df.groupby('congregation')
+        
+        # Create PDF
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+        
+        # Title
+        pdf.set_font('Arial', 'B', 16)
+        pdf.cell(0, 10, 'Donation Payments Report', 0, 1, 'C')
+        pdf.ln(10)
+        
+        # Add date
+        pdf.set_font('Arial', '', 12)
+        pdf.cell(0, 10, f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}", 0, 1)
+        pdf.ln(10)
+        
+        # Add summary stats
+        total_amount = df['amount'].sum()
+        pdf.cell(0, 10, f"Total Donations: ${total_amount:,.2f}", 0, 1)
+        pdf.cell(0, 10, f"Total Donors: {len(df)}", 0, 1)
+        pdf.ln(15)
+        
+        # Add congregation sections
+        for congregation, group in grouped:
+            pdf.set_font('Arial', 'B', 14)
+            pdf.cell(0, 10, f"Congregation: {congregation}", 0, 1)
+            pdf.set_font('Arial', '', 12)
+            
+            # Create table header
+            pdf.cell(60, 10, 'Name', 1, 0, 'L')
+            pdf.cell(40, 10, 'Amount', 1, 0, 'R')
+            pdf.cell(80, 10, 'Purpose', 1, 1, 'L')
+            
+            # Add rows
+            for _, row in group.iterrows():
+                pdf.cell(60, 10, row['name'], 1, 0, 'L')
+                pdf.cell(40, 10, f"${row['amount']:,.2f}", 1, 0, 'R')
+                pdf.cell(80, 10, row['purpose'], 1, 1, 'L')
+            
+            pdf.ln(5)
+        
+        # Save to temporary file
+        temp_file = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        pdf_path = temp_file.name
+        pdf.output(pdf_path)
+        temp_file.close()
+        
+        return pdf_path
+        
+    except Exception as e:
+        print(f"Error generating report: {e}")
+        return None
+
+def send_payment_report_to_finance():
+    """Generate and send the payment report to finance director"""
+    pdf_path = generate_payment_report()
+    if not pdf_path:
+        return
+        
+    finance_phone = os.getenv("FINANCE_PHONE")
+    if not finance_phone:
+        return
+        
+    try:
+        # Send message with PDF
+        whatsapp.send_message(
+            "📊 *New Donation Report* 📊\n"
+            "Here's the latest donation report organized by congregation.",
+            finance_phone
+        )
+        
+        # Send the PDF document
+        whatsapp.send_document(
+            document_path=pdf_path,
+            phone=finance_phone,
+            caption="Donation Payments Report"
+        )
+        
+        # Clean up the temporary file
+        os.unlink(pdf_path)
+        
+    except Exception as e:
+        print(f"Error sending report: {e}")
 
 def handle_admin_approval(admin_phone, msg):
     if msg.lower() == "cancel":
@@ -315,6 +443,8 @@ def webhook():
             session["data"]["note"] = msg
             session["step"] = "done"
             summary = session["data"]
+
+            record_payment(summary)  # Record the payment
             confirm_message = (
                 f"✅ *Thank you {summary['name']}!*\n\n"
                 f"💰 *Amount:* {summary['amount']}\n"
@@ -324,7 +454,9 @@ def webhook():
                 "_We will now send a payment link and notify the finance director after payment is complete._"
             )
             whatsapp.send_message(confirm_message, phone)
-            notify_finance_director(summary)
+            
+            send_payment_report_to_finance()
+
             del sessions[phone]  # Clear the session
 
     return "ok"
