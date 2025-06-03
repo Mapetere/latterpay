@@ -16,8 +16,6 @@ load_dotenv()
 
 app = Flask(__name__)
 
-with open("test.pdf", "wb") as f:
-    f.write(b"%PDF-1.4\n%Tiny Test\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF")
 
 whatsapp = WhatsApp(
     token=os.getenv("WHATSAPP_TOKEN"),
@@ -573,7 +571,7 @@ def webhook():
             f"📝 *Note:* {summary['note']}\n\n"
             "_We will now send a payment link and notify the finance director after payment is complete._"
         )
-        
+
         whatsapp.send_message(confirm_message, phone)
         send_payment_report_to_finance("pdf")
 
