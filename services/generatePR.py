@@ -4,7 +4,7 @@ from fpdf import FPDF
 import os
 import tempfile
 from datetime import datetime
-from services.config import PAYMENTS_FILE
+from services import  config
 
 
 
@@ -12,7 +12,7 @@ from services.config import PAYMENTS_FILE
 def generate_payment_report():
     """Generate a PDF report of all payments grouped by congregation"""
     try:
-        with open(PAYMENTS_FILE, 'r') as f:
+        with open(config.PAYMENTS_FILE, 'r') as f:
             payments = json.load(f)
         
         if not payments:

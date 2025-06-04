@@ -1,6 +1,6 @@
 from datetime import datetime
 import json
-from services.config import config as config
+from services import  config
 
 
 def get_donation_menu():

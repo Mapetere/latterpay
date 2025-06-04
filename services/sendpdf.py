@@ -1,6 +1,6 @@
 import os
 import requests
-from services.config import config as config
+from services import  config
 
 
 def send_pdf(phone, file_path, caption):

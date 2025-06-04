@@ -1,4 +1,4 @@
-import services.config as config
+from services import  config
 from datetime import datetime
 import json
 

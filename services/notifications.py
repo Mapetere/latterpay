@@ -1,7 +1,6 @@
 from services.pygwan_whatsapp import whatsapp
-from services.config import config as config
+from services import  config
 from datetime import datetime, timedelta
-
 import os
 
 def notify_admin_for_approval(user_phone, donation_description):

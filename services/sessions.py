@@ -1,4 +1,4 @@
-from services.config import config as config
+from services import  config
 from datetime import datetime
 from datetime import timedelta
 from services.pygwan_whatsapp import whatsapp
