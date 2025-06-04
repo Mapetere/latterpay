@@ -6,8 +6,10 @@ import json
 from services.pygwan_whatsapp import whatsapp
 from services.config import sessions, donation_types, CUSTOM_TYPES_FILE, PAYMENTS_FILE
 from services.cleanup import cleanup_expired_donation_types
+from services.setup import send_payment_report_to_finance, setup_scheduled_reports
 
 app = Flask(__name__)
+
 
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
