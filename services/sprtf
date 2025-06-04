@@ -1,12 +1,17 @@
+import sendpdf
+import services
 import os
+import config
+
+
+
 
 def send_payment_report_to_finance(report_type="pdf"):
-    finance_phone = os.getenv("FINANCE_PHONE")
-    file_path = generate_payment_report()
+    file_path = services.generate_payment_report()
 
     if not file_path:
         print("❌ No PDF was generated.")
         return
 
-    send_pdf(finance_phone, file_path,"🧾 Church Donation Report")
+    sendpdf.send_pdf(config.finance_phone, file_path,"🧾 Church Donation Report")
     os.unlink(file_path)  # cleanup

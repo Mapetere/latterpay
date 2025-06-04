@@ -1,6 +1,6 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-from python.sprtf import send_payment_report_to_finance
-
+from services import send_payment_report_to_finance
+import atexit
 
 #Daily/weekly auto-reports
 
