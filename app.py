@@ -9,55 +9,22 @@ import pandas as pd
 from fpdf import FPDF
 import tempfile
 import requests
-from python.pygwan_whatsapp import whatsapp
+import python
+from python import whatsapp
+from python.config import sessions, donation_types, CUSTOM_TYPES_FILE, PAYMENTS_FILE
+
+
 
 load_dotenv()
 
 app = Flask(__name__)
 
 
-sessions = {}
-
-donation_types = ["Monthly Contributions", "August Conference", "Youth Conference"]
-donation_types.append("Other")
-
-CUSTOM_TYPES_FILE = "custom_donation_types.json"
-PAYMENTS_FILE = "donation_payment.json"
-
 #Intialize payments file if it doesn't exist
 if not os.path.exists(PAYMENTS_FILE):
     with open(PAYMENTS_FILE, 'w') as f:
         json.dump([], f)
 
-#Daily/weekly auto-reports
-
-def setup_scheduled_reports():
-    """Configure automatic daily/weekly reports"""
-    scheduler = BackgroundScheduler(daemon=True)
-    
-    # Daily report at 9am
-    scheduler.add_job(
-        send_payment_report_to_finance,
-        'cron',
-        day_of_week='mon-fri',
-        hour=9,
-        minute=0,
-        args=["pdf"]  # Send PDF by default
-    )
-    
-    # Weekly summary every Monday at 10am
-    scheduler.add_job(
-        lambda: send_payment_report_to_finance("excel"),  # Excel for weekly
-        'cron',
-        day_of_week='mon',
-        hour=10,
-        minute=0
-    )
-    
-    scheduler.start()
-    
-    # Shut down the scheduler when exiting the app
-    atexit.register(lambda: scheduler.shutdown())
 
 #excel export option
 def generate_excel_report():
@@ -209,16 +176,6 @@ def generate_payment_report():
         print(f"Error generating report: {e}")
         return None
 
-def send_payment_report_to_finance(report_type="pdf"):
-    finance_phone = os.getenv("FINANCE_PHONE")
-    file_path = generate_payment_report()
-
-    if not file_path:
-        print("❌ No PDF was generated.")
-        return
-
-    send_pdf(finance_phone, file_path,"🧾 Church Donation Report")
-    os.unlink(file_path)  # cleanup
 
         
 
