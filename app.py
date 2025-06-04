@@ -3,24 +3,18 @@ from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
 import os
-from pygwan import WhatsApp
 from datetime import datetime, timedelta
 import json
 import pandas as pd
 from fpdf import FPDF
 import tempfile
 import requests
-
+from python.pygwan_whatsapp import whatsapp
 
 load_dotenv()
 
 app = Flask(__name__)
 
-
-whatsapp = WhatsApp(
-    token=os.getenv("WHATSAPP_TOKEN"),
-    phone_number_id=os.getenv("PHONE_NUMBER_ID")
-)
 
 sessions = {}
 
