@@ -1,10 +1,10 @@
 import os
 from apscheduler.schedulers.background import BackgroundScheduler
-from services import sendpdf 
+from services.sendpdf import send_pdf
 from services.generatePR import generate_payment_report 
 from services import  config
 import atexit
-
+import logging
 
 #Daily/weekly auto-reports
 
@@ -38,11 +38,21 @@ def setup_scheduled_reports():
     atexit.register(lambda: scheduler.shutdown())
 
 def send_payment_report_to_finance(report_type="pdf"):
+    logging.debug(f"Starting to generate a {report_type.upper()} report.")
     file_path = generate_payment_report()
 
     if not file_path:
         print("❌ No PDF was generated.")
         return
 
-    sendpdf.send_pdf(config.finance_phone, file_path,"🧾 Church Donation Report")
-    os.unlink(file_path)  # cleanup
+    try:
+        send_pdf(config.finance_phone, file_path, "🧾 Church Donation Report")
+        logging.info(f"📤 Report sent successfully to: {config.finance_phone}")
+    except Exception as e:
+        logging.exception(f"🚨 Failed to send report: {str(e)}")
+    finally:
+        try:
+            os.unlink(file_path)
+            logging.debug(f"🧹 Temporary file deleted: {file_path}")
+        except Exception as e:
+            logging.warning(f"⚠️ Could not delete temporary file: {file_path} — {str(e)}")

@@ -114,7 +114,10 @@ def webhook():
     print(f"Message from {name} ({phone}): {msg}")
 
     # Check for timeout first
-    from services.notifications import check_session_timeout, cancel_session, notify_admin_for_approval, record_payment, send_payment_report_to_finance
+    from services.notifications import notify_admin_for_approval
+    from services.recordpaymentdata import record_payment
+    from services.sessions import check_session_timeout, cancel_session
+
     if check_session_timeout(phone):
         return "ok"
     
@@ -245,9 +248,10 @@ def webhook():
             f"📝 *Note:* {summary['note']}\n\n"
             "_We will now send a payment link and notify the finance director after payment is complete._"
         )
-
-        whatsapp.send_message(confirm_message, phone)
+        
         send_payment_report_to_finance("pdf")
+        whatsapp.send_message(confirm_message, phone)
+        
 
         del sessions[phone]  # Clear the session
 
