@@ -1,3 +1,4 @@
+from services.pygwan_whatsapp import whatsapp
 import config
 from datetime import datetime, timedelta
 
@@ -13,7 +14,7 @@ def notify_admin_for_approval(user_phone, donation_description):
         "Example:\n"
         f"/approve {user_phone} 1year"
     )
-    config.whatsapp.send_message(approval_msg, config.admin_phone)
+    whatsapp.send_message(approval_msg, config.admin_phone)
 
 
 def notify_finance_director(d):
@@ -25,4 +26,4 @@ def notify_finance_director(d):
         f"🌍 Congregation: {d['region']}\n"
         f"📝 Note: {d['note']}"
     )
-    config.whatsapp.send_message(msg, config.finance_phone)
+    whatsapp.send_message(msg, config.finance_phone)

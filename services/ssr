@@ -28,6 +28,7 @@ def setup_scheduled_reports():
     )
     
     scheduler.start()
-    
+    scheduler.remove_all_jobs()
+    print("Scheduled reports setup complete.")
     # Shut down the scheduler when exiting the app
     atexit.register(lambda: scheduler.shutdown())

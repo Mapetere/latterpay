@@ -1,12 +1,13 @@
 import config  
 from datetime import datetime
 from datetime import timedelta
+from services.pygwan_whatsapp import whatsapp
 
 def cancel_session(phone):
     """Cancel and clean up a user's session"""
     if phone in config.sessions:
         del config.sessions[phone]
-    config.whatsapp.send_message(
+    whatsapp.send_message(
         "🚫 Your donation session has been cancelled. "
         "You can start a new donation anytime by sending a message.",
         phone

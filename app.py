@@ -5,8 +5,7 @@ from datetime import datetime, timedelta
 import json
 from services.pygwan_whatsapp import whatsapp
 from services.config import sessions, donation_types, CUSTOM_TYPES_FILE, PAYMENTS_FILE
-from services import cleanuupexpired  
-from cleanupexpired import cleanup_expired_donation_types
+from services import cleanup_expired_donation_types
 from services import setup_scheduled_reports
 
 
