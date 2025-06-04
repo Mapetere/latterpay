@@ -1,7 +1,7 @@
 import datetime as datetime
 import config
 import json
-import os
+
 
 
 def cleanup_expired_donation_types():
