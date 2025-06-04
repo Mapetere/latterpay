@@ -1,15 +1,13 @@
 from dotenv import load_dotenv
 import os
-
 load_dotenv()
-
-
 finance_phone = os.getenv("FINANCE_PHONE")
 access_token = os.getenv("WHATSAPP_TOKEN")
 phone_number_id = os.getenv("PHONE_NUMBER_ID")
 admin_phone = os.getenv("ADMIN_PHONE") 
 
 sessions = {}
+
 
 donation_types = ["Monthly Contributions", "August Conference", "Youth Conference"]
 donation_types.append("Other")
@@ -25,4 +23,3 @@ menu = [
     ]
     
 
-    

@@ -1,4 +1,4 @@
-import config
+import services.config as config
 import json
 import pandas as pd
 from fpdf import FPDF   

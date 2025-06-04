@@ -1,8 +1,6 @@
-import datetime as datetime
-import config
+import services.config as config
+from datetime import datetime
 import json
-
-
 
 def cleanup_expired_donation_types():
     try:

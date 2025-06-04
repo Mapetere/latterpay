@@ -1,7 +1,8 @@
-import config  
+from services.config import config as config
 from datetime import datetime
 from datetime import timedelta
 from services.pygwan_whatsapp import whatsapp
+
 
 def cancel_session(phone):
     """Cancel and clean up a user's session"""

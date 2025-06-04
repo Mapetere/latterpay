@@ -1,5 +1,5 @@
 from services.pygwan_whatsapp import whatsapp
-import config
+from services.config import config as config
 from datetime import datetime, timedelta
 
 import os
