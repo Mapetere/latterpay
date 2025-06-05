@@ -37,13 +37,34 @@ def setup_scheduled_reports():
     # Shut down the scheduler when exiting the app
     atexit.register(lambda: scheduler.shutdown())
 
-def send_payment_report_to_finance(report_type="pdf"):
-    logging.debug(f"Starting to generate a {report_type.upper()} report.")
-    file_path = generate_payment_report()
+def send_payment_report_to_finance():
+    try:
+        # 1. Generate PDF
+        pdf_path = generate_payment_report()
+        if not pdf_path:
+            print(" PDF generation failed")
+            return False
 
-    send_pdf(config.finance_phone, file_path, "🧾 Church Donation Report")
-    logging.info(f"📤 Report sent successfully to: {config.finance_phone}")
+        # 2. Verify PDF
+        if not os.path.exists(pdf_path):
+            print(f"PDF not found at {pdf_path}")
+            return False
 
-    if not file_path:
-        print("❌ No PDF was generated.")
-        return
+        print(f" PDF generated ({os.path.getsize(pdf_path)} bytes)")
+
+        # 3. Send PDF
+        success = send_pdf(
+            phone=config.FINANCE_PHONE,
+            file_path=pdf_path,
+            caption="Donation Report"
+        )
+
+        # 4. Clean up
+        if os.path.exists(pdf_path):
+            os.unlink(pdf_path)
+
+        return success
+
+    except Exception as e:
+        print(f" Error in send_payment_report_to_finance: {e}")
+        return False
