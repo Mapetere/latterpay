@@ -1,19 +1,37 @@
 from flask import Flask, request
-from apscheduler.schedulers.background import BackgroundScheduler
+from datetime import datetime
 import os
-from datetime import datetime, timedelta
 import json
+from dotenv import load_dotenv
 from services.pygwan_whatsapp import whatsapp
-from services.config import sessions, donation_types, CUSTOM_TYPES_FILE, PAYMENTS_FILE
-from services.cleanup import cleanup_expired_donation_types
-from services.setup import  setup_scheduled_reports
+from services.config import CUSTOM_TYPES_FILE, sessions, PAYMENTS_FILE, donation_types as DONATION_TYPES
+from services.sessions import (
+    check_session_timeout,
+    cancel_session,
+    initialize_session
+)
+from services.donationflow import (
+    handle_other,
+    handle_name_step,
+    handle_amount_step,
+    handle_donation_type_step,
+    handle_region_step,
+    handle_note_step  
+)
+from services.adminservice import handle_admin_command
+
+load_dotenv()
 
 app = Flask(__name__)
 
-
-# Initialize custom donation types from file if it doesn't exist
+# Initialize data files
 if not os.path.exists(CUSTOM_TYPES_FILE):
     with open(CUSTOM_TYPES_FILE, 'w') as f:
+        json.dump([], f)
+
+#Intialize payments file if it doesn't exist
+if not os.path.exists(PAYMENTS_FILE):
+    with open(PAYMENTS_FILE, 'w') as f:
         json.dump([], f)
 
 
@@ -24,219 +42,66 @@ def webhook():
         if request.args.get("hub.verify_token") == os.getenv("VERIFY_TOKEN"):
             return request.args.get("hub.challenge")
         return "Invalid verify token", 403
-
+    
     print("[WEBHOOK] POST triggered")
     data = request.get_json()
-    print(f"Received data: {json.dumps(data, indent=2)}")  # Better debug output
     
+   
+
+    # Skip if not a message
     if not whatsapp.is_message(data):
-        return "ok"  # Not a message we care about
+        return "ok"
 
     phone = whatsapp.get_mobile(data)
     name = whatsapp.get_name(data)
-    msg = whatsapp.get_message(data).lower().strip()
+    msg = whatsapp.get_message(data).strip()
 
-    # 🧑🏾‍💼 Admin-only commands (handle early and exit)
+   
+    # Handle admin commands
     if phone == os.getenv("ADMIN_PHONE"):
-        # ADMIN COMMANDS HANDLING (ADD THIS SECTION)
-        if msg == "/admin":
-            whatsapp.send_message(
-                "👩🏾‍💼 *Admin Panel*\n"
-                "Use the following commands:\n"
-                "• /report pdf or /report excel\n"
-                "• /approve \n"
-                "• /session — View current session state",
-                phone
-            )
-            return "ok"
+        return handle_admin_command(phone, msg) or "ok"
 
-        elif msg == "/report pdf":
-            from services.notifications import send_payment_report_to_finance
-            send_payment_report_to_finance("pdf")
-            whatsapp.send_message("✅ PDF report sent to finance.", phone)
-            return "ok"
-
-        elif msg == "/report excel":
-            send_payment_report_to_finance("excel")
-            whatsapp.send_message("✅ Excel report sent to finance.", phone)
-            return "ok"
-
-        elif msg.startswith("/approve") or msg.startswith("/session"):
-            from services.notifications import handle_admin_approval
-            handle_admin_approval(phone, msg)
-            return "ok"
-
-        elif msg == "/session":
-            whatsapp.send_message(f"📦 Current session:\n```{json.dumps(sessions.get(phone), indent=2)}```", phone)
-            return "ok"
-
-    
-
-    # Check for timeout first
-    from services.recordpaymentdata import record_payment
-    from services.sessions import check_session_timeout, cancel_session
-
+    # Check session timeout
     if check_session_timeout(phone):
         return "ok"
-    
-    
-    # Handle regular user messages
-    if msg == "cancel":
+
+    # Handle cancellation
+    if msg.lower() == "cancel":
         cancel_session(phone)
         return "ok"
-    
-    
 
-    # Initialize session if it doesn't exist
+    # Initialize new session
     if phone not in sessions:
-        sessions[phone] = {
-            "step": "name", 
-            "data": {},
-            "last_active": datetime.now()
-        }
-        whatsapp.send_message(
-            f"Hi {name}! Welcome to the Latter Rain Church Donation Bot.\n"
-            "Kindly enter your *full name*\n\n"
-            "_You can type *cancel* at any time to exit._", 
-            phone
-        )
-        return "ok"
+        initialize_session(phone, name)
+        
     
-    # Update activity timestamp
+    # Update session activity
     sessions[phone]["last_active"] = datetime.now()
     session = sessions[phone]
 
-    # Handle session steps
-    if session["step"] == "name":
-        session["data"]["name"] = msg
-        session["step"] = "amount"
-        whatsapp.send_message(
-            "💰 *How much would you like to donate?*\n"
-            "Enter amount (e.g. 5000)\n\n"
-            "_Type *cancel* to exit_",
-            phone
-        )
+    # Route through session steps
+    step_handlers = {
+        "name": handle_name_step,
+        "amount": handle_amount_step,
+        "donation_type": handle_donation_type_step,
+        "other_donation_details": handle_other,
+        "region": handle_region_step,
+        "note": handle_note_step
+    }
 
-
-    elif session["step"] == "amount":
-        try:
-            # Validate it's a number
-            float(msg)
-            session["data"]["amount"] = msg
-            session["step"] = "donation_type"
-            from services.getdonationmenu import get_donation_menu
-            whatsapp.send_message(
-                "🙏🏾 *Please choose the purpose of your donation:*\n\n"
-                f"{get_donation_menu()}\n\n"
-                "_Reply with the number (1-4)_\n"
-                "_Type *cancel* to exit_",
-                phone
-            )
-        except ValueError:
-            whatsapp.send_message(
-                "❗*Invalid Amount*\n"
-                "Please enter a valid number (e.g. 5000)\n\n"
-                "_Type *cancel* to exit_",
-                phone
-            )
-
-    elif session["step"] == "donation_type":
-        menu=get_donation_menu()
-        max_options=len(menu)
-
-        # Check for cancellation first
-        if msg.lower() == "cancel":
-            cancel_session(phone)
-            return "ok"
-         # Validate selection
-        from services.getdonationmenu import validate_donation_choice
-        is_valid, response = validate_donation_choice(msg, max_options)
-
-
-        if not is_valid:
-            whatsapp.send_message(
-                f"❌ *Invalid Selection*\n"
-                f"{response}\n\n"
-                f"Please choose:\n" + 
-                "\n".join(menu) +
-                "\n\n_Tap a number or type *cancel*_",
-                phone
-            )
-            return "ok"
+    if session["step"] in step_handlers:
+        
+        return step_handlers[session["step"]](phone, msg, session)
     
-        choice_num = response 
+    return "Invalid session step", 400
 
-
-        if choice_num == 4:  # Other
-            session["step"] = "other_donation_details"
-            whatsapp.send_message(
-                "✏️ *New Donation Purpose*\n"
-                "Describe what this donation is for:\n\n"
-                "_Example: \"Building Fund\" or \"Pastoral Support\"_\n"
-                "_Type *cancel* to go back_",
-                phone
-            )
-            
-        elif choice_num <= 3:  # Standard types
-            session["data"]["donation_type"] = donation_types[choice_num-1]
-            session["step"] = "region"
-            whatsapp.send_message(
-                "🌍 *Congregation Name*:\n"
-                "Please share your congregation\n\n"
-                "_Type *cancel* to exit_",
-                phone
-            )
-        else:  # Custom types (5+)
-            with open(CUSTOM_TYPES_FILE, 'r') as f:
-                custom_types = json.load(f)
-            custom_type = custom_types[choice_num-5]
-            session["data"]["donation_type"] = custom_type["description"]
-            session["step"] = "region"
-            whatsapp.send_message(
-                "🌍 *Congregation Name*:\n"
-                "Please share your congregation\n\n"
-                "_Type *cancel* to exit_",
-                phone
-            )
-
-    elif session["step"] == "region":
-        session["data"]["region"] = msg
-        session["step"] = "note"
-        whatsapp.send_message(
-            "📝 *Additional Notes*:\n"
-            "Any extra notes for the finance director?\n\n"
-            "_Type *cancel* to exit_",
-            phone
-        )
-        
-
-    elif session["step"] == "note":
-        session["data"]["note"] = msg
-        session["step"] = "done"
-        summary = session["data"]
-
-        record_payment(summary)  # Record the payment
-        confirm_message = (
-            f"✅ *Thank you {summary['name']}!*\n\n"
-            f"💰 *Amount:* {summary['amount']}\n"
-            f"📌 *Type:* {summary['donation_type']}\n"
-            f"🌍 *Congregation:* {summary['region']}\n"
-            f"📝 *Note:* {summary['note']}\n\n"
-            "_We will now send a payment link and notify the finance director after payment is complete._"
-        )
-        
-        from services.setup import send_payment_report_to_finance   
-        send_payment_report_to_finance()
-        whatsapp.send_message(confirm_message, phone)
-        
-
-        del sessions[phone]  # Clear the session
-
-    return "ok"
+   
 
 if __name__ == "__main__":
-        # Clean up expired types on startup
-        cleanup_expired_donation_types()
-        setup_scheduled_reports()
-        app.run(port=5000, debug=True)
-        
+    from services.cleanup import cleanup_expired_donation_types
+    from services.setup import setup_scheduled_reports
+
+
+    cleanup_expired_donation_types()
+    setup_scheduled_reports()
+    app.run(port=5000, debug=True)
