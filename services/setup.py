@@ -4,7 +4,6 @@ from services.sendpdf import send_pdf
 from services.generatePR import generate_payment_report 
 from services import  config
 import atexit
-import logging
 
 #Daily/weekly auto-reports
 
@@ -12,15 +11,6 @@ def setup_scheduled_reports():
     """Configure automatic daily/weekly reports"""
     scheduler = BackgroundScheduler(daemon=True)
     
-    # Daily report at 9am
-    scheduler.add_job(
-        send_payment_report_to_finance,
-        'cron',
-        day_of_week='mon-fri',
-        hour=9,
-        minute=0,
-        args=["pdf"]  # Send PDF by default
-    )
     
     # Weekly summary every Monday at 10am
     scheduler.add_job(
@@ -32,9 +22,9 @@ def setup_scheduled_reports():
     )
     
     scheduler.start()
-    scheduler.remove_all_jobs()
     print("Scheduled reports setup complete.")
-    # Shut down the scheduler when exiting the app
+    scheduler.remove_all_jobs()
+
     atexit.register(lambda: scheduler.shutdown())
 
 def send_payment_report_to_finance():
@@ -54,7 +44,7 @@ def send_payment_report_to_finance():
 
         # 3. Send PDF
         success = send_pdf(
-            phone=config.FINANCE_PHONE,
+            phone=config.finance_phone,
             file_path=pdf_path,
             caption="Donation Report"
         )

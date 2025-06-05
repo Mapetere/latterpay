@@ -209,7 +209,7 @@ def webhook():
         )
         
         from services.setup import send_payment_report_to_finance   
-        send_payment_report_to_finance("pdf")
+        send_payment_report_to_finance()
         whatsapp.send_message(confirm_message, phone)
         
 

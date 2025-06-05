@@ -69,7 +69,7 @@ def generate_payment_report():
         pdf.output(pdf_path)
         temp_file.close()
         
-        print(f"📁 Found {len(payments)} payments in file.")
+        print(f"Found {len(payments)} payments in file.")
 
         return pdf_path
         
