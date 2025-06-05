@@ -20,5 +20,13 @@ def get_donation_menu():
     
     return "\n".join(config.menu)
 
-
+def validate_donation_choice(choice, max_options):
+    """Validate user's donation type selection"""
+    try:
+        choice_num = int(choice)
+        if 1 <= choice_num <= max_options:
+            return True, choice_num
+        return False, f"Please select between 1-{max_options}"
+    except ValueError:
+        return False, "Please enter a valid number"
 

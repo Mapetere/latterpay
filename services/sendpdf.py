@@ -38,4 +38,4 @@ def send_pdf(phone, file_path, caption):
         resp = requests.post(send_url, json=payload, headers=headers)
         print(resp.json())
     else:
-        print("❌ Failed to upload media.")    
+        print(" Failed to upload media.")    
