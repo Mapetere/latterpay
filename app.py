@@ -141,8 +141,44 @@ def webhook():
             )
 
     elif session["step"] == "donation_type":
-        if msg in ["1", "2", "3"]:
-            session["data"]["donation_type"] = donation_types[int(msg)-1]
+        menu=get_donation_menu()
+        max_options=len(menu)
+
+        # Check for cancellation first
+        if msg.lower() == "cancel":
+            cancel_session(phone)
+            return "ok"
+         # Validate selection
+        from services.getdonationmenu import validate_donation_choice
+        is_valid, response = validate_donation_choice(msg, max_options)
+
+
+        if not is_valid:
+            whatsapp.send_message(
+                f"❌ *Invalid Selection*\n"
+                f"{response}\n\n"
+                f"Please choose:\n" + 
+                "\n".join(menu) +
+                "\n\n_Tap a number or type *cancel*_",
+                phone
+            )
+            return "ok"
+    
+        choice_num = response 
+
+
+        if choice_num == 4:  # Other
+            session["step"] = "other_donation_details"
+            whatsapp.send_message(
+                "✏️ *New Donation Purpose*\n"
+                "Describe what this donation is for:\n\n"
+                "_Example: \"Building Fund\" or \"Pastoral Support\"_\n"
+                "_Type *cancel* to go back_",
+                phone
+            )
+            
+        elif choice_num <= 3:  # Standard types
+            session["data"]["donation_type"] = donation_types[choice_num-1]
             session["step"] = "region"
             whatsapp.send_message(
                 "🌍 *Congregation Name*:\n"
@@ -150,37 +186,18 @@ def webhook():
                 "_Type *cancel* to exit_",
                 phone
             )
-
-        
-        
-        elif msg == "4":
-            session["step"] = "other_donation_details"
+        else:  # Custom types (5+)
+            with open(CUSTOM_TYPES_FILE, 'r') as f:
+                custom_types = json.load(f)
+            custom_type = custom_types[choice_num-5]
+            session["data"]["donation_type"] = custom_type["description"]
+            session["step"] = "region"
             whatsapp.send_message(
-                "✏️ *New Donation Purpose*:\n"
-                "Describe what this donation is for\n\n"
-                "_Example: \"Building Fund\" or \"Pastoral Support\"_\n" \
+                "🌍 *Congregation Name*:\n"
+                "Please share your congregation\n\n"
                 "_Type *cancel* to exit_",
                 phone
             )
-        else:
-            whatsapp.send_message(
-                "❌ *Invalid Selection*\n"
-                "Please choose:\n\n"
-                f"{get_donation_menu()}\n\n"
-                "_Type *cancel* to exit_",
-                phone
-            )
-
-        
-
-    elif session["step"] == "other_donation_details":
-        session["data"]["donation_type"] = f"Other: {msg}"
-        session["data"]["custom_donation_request"] = msg
-        session["step"] = "region"
-        whatsapp.send_message(
-            "🌍 *Congregation Name*:\n"
-            "Please share your congregation,phone"
-        )
 
     elif session["step"] == "region":
         session["data"]["region"] = msg
