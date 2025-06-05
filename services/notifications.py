@@ -3,17 +3,7 @@ from services import  config
 from datetime import datetime, timedelta
 import os
 
-def notify_admin_for_approval(user_phone, donation_description):
-    approval_msg = (
-        "🆕 New Donation Type Request\n\n"
-        f"From: {user_phone}\n"
-        f"Request: {donation_description}\n\n"
-        "To approve, reply with:\n"
-        f"/approve {user_phone} [duration]\n\n"
-        "Example:\n"
-        f"/approve {user_phone} 1year"
-    )
-    whatsapp.send_message(approval_msg, config.admin_phone)
+
 
 
 def notify_finance_director(d):

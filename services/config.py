@@ -21,7 +21,9 @@ menu = [
         "1. _*Monthly Contributions*_",
         "2. _*August Conference*_",
         "3. _*Youth Conference*_",
-        "4. _*Other*_ (describe new purpose)"
+        "4. _*Other*_ (describe new purpose)\n"
+
+        "5. *Learn more about donation types*"
     ]
     
 

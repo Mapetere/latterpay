@@ -6,49 +6,9 @@ import json
 from services.pygwan_whatsapp import whatsapp
 from services.config import sessions, donation_types, CUSTOM_TYPES_FILE, PAYMENTS_FILE
 from services.cleanup import cleanup_expired_donation_types
-from services.setup import send_payment_report_to_finance, setup_scheduled_reports
+from services.setup import  setup_scheduled_reports
 
 app = Flask(__name__)
-
-
-from apscheduler.schedulers.background import BackgroundScheduler
-import atexit
-
-#Daily/weekly auto-reports
-
-def setup_scheduled_reports():
-    """Configure automatic daily/weekly reports"""
-    scheduler = BackgroundScheduler(daemon=True)
-    
-    # Daily report at 9am
-    scheduler.add_job(
-        send_payment_report_to_finance,
-        'cron',
-        day_of_week='mon-fri',
-        hour=9,
-        minute=0,
-        args=["pdf"]  # Send PDF by default
-    )
-    
-    # Weekly summary every Monday at 10am
-    scheduler.add_job(
-        lambda: send_payment_report_to_finance("excel"),  # Excel for weekly
-        'cron',
-        day_of_week='mon',
-        hour=10,
-        minute=0
-    )
-    
-    scheduler.start()
-    scheduler.remove_all_jobs()
-    print("Scheduled reports setup complete.")
-    # Shut down the scheduler when exiting the app
-    atexit.register(lambda: scheduler.shutdown())
-
-#Intialize payments file if it doesn't exist
-if not os.path.exists(PAYMENTS_FILE):
-    with open(PAYMENTS_FILE, 'w') as f:
-        json.dump([], f)
 
 
 # Initialize custom donation types from file if it doesn't exist
@@ -78,13 +38,13 @@ def webhook():
 
     # 🧑🏾‍💼 Admin-only commands (handle early and exit)
     if phone == os.getenv("ADMIN_PHONE"):
+        # ADMIN COMMANDS HANDLING (ADD THIS SECTION)
         if msg == "/admin":
-            whatsapp.send_message("⚠️ You're the admin, but continuing as a donor. Type /admin to see admin commands.", phone)
             whatsapp.send_message(
                 "👩🏾‍💼 *Admin Panel*\n"
                 "Use the following commands:\n"
                 "• /report pdf or /report excel\n"
-                "• /approve <user> <duration>\n"
+                "• /approve \n"
                 "• /session — View current session state",
                 phone
             )
@@ -111,10 +71,8 @@ def webhook():
             return "ok"
 
     
-    print(f"Message from {name} ({phone}): {msg}")
 
     # Check for timeout first
-    from services.notifications import notify_admin_for_approval
     from services.recordpaymentdata import record_payment
     from services.sessions import check_session_timeout, cancel_session
 
@@ -192,12 +150,15 @@ def webhook():
                 "_Type *cancel* to exit_",
                 phone
             )
+
+        
+        
         elif msg == "4":
             session["step"] = "other_donation_details"
             whatsapp.send_message(
                 "✏️ *New Donation Purpose*:\n"
                 "Describe what this donation is for\n\n"
-                "_Example: \"Building Fund\" or \"Pastoral Support\"_\n"
+                "_Example: \"Building Fund\" or \"Pastoral Support\"_\n" \
                 "_Type *cancel* to exit_",
                 phone
             )
@@ -210,17 +171,15 @@ def webhook():
                 phone
             )
 
+        
+
     elif session["step"] == "other_donation_details":
         session["data"]["donation_type"] = f"Other: {msg}"
         session["data"]["custom_donation_request"] = msg
         session["step"] = "region"
-        notify_admin_for_approval(phone, msg)
         whatsapp.send_message(
             "🌍 *Congregation Name*:\n"
-            "Please share your congregation\n\n"
-            "_Note: Your custom donation type has been submitted for approval._ "
-            "_We'll notify you once it's approved for future use._",
-            phone
+            "Please share your congregation,phone"
         )
 
     elif session["step"] == "region":
@@ -249,6 +208,7 @@ def webhook():
             "_We will now send a payment link and notify the finance director after payment is complete._"
         )
         
+        from services.setup import send_payment_report_to_finance   
         send_payment_report_to_finance("pdf")
         whatsapp.send_message(confirm_message, phone)
         

@@ -51,14 +51,15 @@ def generate_payment_report():
             
             # Create table header
             pdf.cell(60, 10, 'Name', 1, 0, 'L')
-            pdf.cell(40, 10, 'Amount', 1, 0, 'R')
+            pdf.cell(40, 10, 'Amount', 1, 0, 'L')
             pdf.cell(80, 10, 'Purpose', 1, 1, 'L')
             
             # Add rows
             for _, row in group.iterrows():
                 pdf.cell(60, 10, row['name'], 1, 0, 'L')
-                pdf.cell(40, 10, f"${row['amount']:,.2f}", 1, 0, 'R')
+                pdf.cell(40, 10, f"${row['amount']:,.2f}", 1, 0, 'L')
                 pdf.cell(80, 10, row['purpose'], 1, 1, 'L')
+                
             
             pdf.ln(5)
         
@@ -68,6 +69,8 @@ def generate_payment_report():
         pdf.output(pdf_path)
         temp_file.close()
         
+        print(f"📁 Found {len(payments)} payments in file.")
+
         return pdf_path
         
     except Exception as e:

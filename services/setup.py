@@ -41,18 +41,9 @@ def send_payment_report_to_finance(report_type="pdf"):
     logging.debug(f"Starting to generate a {report_type.upper()} report.")
     file_path = generate_payment_report()
 
+    send_pdf(config.finance_phone, file_path, "🧾 Church Donation Report")
+    logging.info(f"📤 Report sent successfully to: {config.finance_phone}")
+
     if not file_path:
         print("❌ No PDF was generated.")
         return
-
-    try:
-        send_pdf(config.finance_phone, file_path, "🧾 Church Donation Report")
-        logging.info(f"📤 Report sent successfully to: {config.finance_phone}")
-    except Exception as e:
-        logging.exception(f"🚨 Failed to send report: {str(e)}")
-    finally:
-        try:
-            os.unlink(file_path)
-            logging.debug(f"🧹 Temporary file deleted: {file_path}")
-        except Exception as e:
-            logging.warning(f"⚠️ Could not delete temporary file: {file_path} — {str(e)}")
