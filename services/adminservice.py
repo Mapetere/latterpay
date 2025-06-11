@@ -3,6 +3,10 @@
 from datetime import datetime, timedelta
 import json
 from services import config
+from services.pygwan_whatsapp import whatsapp
+from services.config import sessions
+from services.setup import send_payment_report_to_finance
+
 
 class AdminService:
     @staticmethod
@@ -107,3 +111,37 @@ class AdminService:
             "✅ Approval processed successfully!",
             admin_phone
         )
+
+    @staticmethod
+    def handle_admin_command(phone,msg):
+    # 🧑🏾‍💼 Admin-only commands (handle early and exit)
+        if phone == os.getenv("ADMIN_PHONE"):
+            if msg == "/admin":
+                whatsapp.send_message("⚠️ You're the admin, but continuing as a donor. Type /admin to see admin commands.", phone)
+                whatsapp.send_message(
+                    "👩🏾‍💼 *Admin Panel*\n"
+                    "Use the following commands:\n"
+                    "• /report pdf or /report excel\n"
+                    "• /approve <user> <duration>\n"
+                    "• /session — View current session state",
+                    phone
+                )
+                return "ok"
+
+            elif msg == "/report pdf":
+                send_payment_report_to_finance("pdf")
+                whatsapp.send_message("✅ PDF report sent to finance.", phone)
+                return "ok"
+
+            elif msg == "/report excel":
+                send_payment_report_to_finance("excel")
+                whatsapp.send_message("✅ Excel report sent to finance.", phone)
+                return "ok"
+
+            elif msg.startswith("/approve") or msg.startswith("/session"):
+                AdminService.handle_approval_command(phone, msg)
+                return "ok"
+
+            elif msg == "/session":
+                whatsapp.send_message(f"📦 Current session:\n```{json.dumps(sessions.get(phone), indent=2)}```", phone)
+                return "ok"   
