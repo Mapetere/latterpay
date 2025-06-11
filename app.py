@@ -18,7 +18,7 @@ from services.donationflow import (
     handle_region_step,
     handle_note_step  
 )
-from services.adminservice import handle_admin_command
+from services.adminservice import AdminService
 
 load_dotenv()
 
@@ -59,7 +59,7 @@ def webhook():
    
     # Handle admin commands
     if phone == os.getenv("ADMIN_PHONE"):
-        return handle_admin_command(phone, msg) or "ok"
+        return AdminService.handle_admin_command(phone, msg) or "ok"
 
     # Check session timeout
     if check_session_timeout(phone):
