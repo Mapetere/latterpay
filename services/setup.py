@@ -27,7 +27,7 @@ def setup_scheduled_reports():
 
     atexit.register(lambda: scheduler.shutdown())
 
-def send_payment_report_to_finance():
+def send_payment_report_to_finance(report_type):
     try:
         # 1. Generate PDF
         pdf_path = generate_payment_report()

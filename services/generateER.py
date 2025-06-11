@@ -3,7 +3,6 @@ import json
 import pandas as pd
 from fpdf import FPDF   
 import tempfile
-
 def generate_excel_report():
     """Generate Excel report of all payments"""
     try:
