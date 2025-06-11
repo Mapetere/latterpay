@@ -1,4 +1,5 @@
 pygwan
+fpdf
 requests
 pandas
 flask
