@@ -3,8 +3,4 @@ requests
 pandas
 flask
 python-dotenv
-tempfile
-datetime
-os
 apscheduler
-atexit
