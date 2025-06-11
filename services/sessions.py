@@ -1,6 +1,7 @@
 from services import  config
 from datetime import datetime
 from datetime import timedelta
+from config import sessions
 from services.pygwan_whatsapp import whatsapp
 
 
@@ -22,3 +23,20 @@ def check_session_timeout(phone):
             cancel_session(phone)
             return True
     return False
+
+def initialize_session(phone, name):
+    phone = whatsapp.get_mobile(phone)
+    if phone not in sessions:
+        sessions[phone] = {
+            "step": "name",
+            "data": {},
+            "last_active": datetime.now()
+        }
+        whatsapp.send_message(
+            f"Good day {name}!\n"
+            "I'm latterpay, here to assist you with your ecocash payments to Latter Rain Church(Zimbabwe).\n\n"
+            "To begin , please enter *payee full name:*  ",
+            phone
+        )
+
+        return "ok"
