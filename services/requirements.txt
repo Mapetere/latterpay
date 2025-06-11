@@ -1,6 +1,0 @@
-pygwan
-requests
-pandas
-flask
-python-dotenv
-apscheduler
