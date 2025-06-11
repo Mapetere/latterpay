@@ -4,16 +4,7 @@ from services.sendpdf import send_pdf
 from services.generatePR import generate_payment_report 
 from services import  config
 import atexit
-from setuptools import setup
 
-setup(
-    # your existing setup args here
-    entry_points={
-        'console_scripts': [
-            'start-app = sendpdf:main',  # assumes sendpdf.py has a main() function
-        ],
-    },
-)
 
 #Daily/weekly auto-reports
 

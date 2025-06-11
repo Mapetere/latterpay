@@ -1,7 +1,7 @@
 from services import  config
 from datetime import datetime
 from datetime import timedelta
-from config import sessions
+
 from services.pygwan_whatsapp import whatsapp
 
 
@@ -26,8 +26,8 @@ def check_session_timeout(phone):
 
 def initialize_session(phone, name):
     phone = whatsapp.get_mobile(phone)
-    if phone not in sessions:
-        sessions[phone] = {
+    if phone not in config.sessions:
+        config.sessions[phone] = {
             "step": "name",
             "data": {},
             "last_active": datetime.now()
