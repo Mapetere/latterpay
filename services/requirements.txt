@@ -2,6 +2,9 @@ pygwan
 requests
 pandas
 flask
-dotenv
-json
-a
+python-dotenv
+tempfile
+datetime
+os
+apscheduler
+atexit
