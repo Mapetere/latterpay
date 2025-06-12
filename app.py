@@ -118,7 +118,7 @@ def register_phone_number(phone_number_id, access_token, pin):
     
     return response
 
-if __name__ == "_main_":
+if __name__ == "__main__":
     PHONE_NUMBER_ID = " 666157656583239"
     ACCESS_TOKEN = "EAAIrEZAia0v8BO5xHnuGXNrzsBTgqzlTkKyjFFfDll46bMGVzoXV3mJjq9NLAwsTd8RPREz6grYGD3musybZAjK1Uy46H1Q2vcVyWL2fehKUtZC6S6QwdsLWeckZBIXG4WaWbcwtbhoUI4LDy6G5WyNlow82MBBWkbtwd1mCSVEP9sIuDEhLinmug5PBLmKMXgZDZD"
     PIN = "123456"  # Use your PIN here
