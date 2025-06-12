@@ -52,10 +52,15 @@ def home():
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
     try:
-        if request.method == "GET":
-            if request.args.get("hub.verify_token") == os.getenv("VERIFY_TOKEN"):
-                return request.args.get("hub.challenge")
-            return "Invalid verify token", 403
+        if request.method == "GET": 
+            verify_token = request.args.get("hub.verify_token")
+            challenge = request.args.get("hub.challenge")
+            expected_token = os.getenv("VERIFY_TOKEN")
+
+            if verify_token == expected_token:
+                return challenge, 200
+            else:
+                return "Invalid verify token", 403
 
         if request.method == "POST":
             print("[DEBUG] Got POST")
