@@ -120,4 +120,4 @@ if __name__ == "__main__":
 
     cleanup_expired_donation_types()
     setup_scheduled_reports()
-    app.run(port=5000, debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
