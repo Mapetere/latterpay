@@ -1,6 +1,7 @@
 from flask import Flask, request
 from flask import Flask, request
 from datetime import datetime
+import requests
 import os
 import json
 from dotenv import load_dotenv
@@ -37,10 +38,15 @@ if not os.path.exists(PAYMENTS_FILE):
 
 
 
+
 try:
     app = Flask(__name__)
 except Exception as e:
     print(f"[ERROR INIT FLASK] {e}")
+
+@app.route("/")
+def home():
+    return "App is alive!"
 
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
@@ -106,16 +112,10 @@ def webhook():
 
     
 
-import requests
 
-
-
-
-import os
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5990))
     print(f"🌍 Flask app running on port {port}")
-    
     app.run(host="0.0.0.0", port=port)
 
