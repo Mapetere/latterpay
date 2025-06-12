@@ -46,6 +46,7 @@ except Exception as e:
 
 @app.route("/")
 def home():
+    print("[INFO] Home route hit!")
     return "App is alive!"
 
 @app.route("/webhook", methods=["GET", "POST"])
