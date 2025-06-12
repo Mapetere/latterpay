@@ -61,6 +61,9 @@ def webhook():
             verify_token = request.args.get("hub.verify_token")
             challenge = request.args.get("hub.challenge")
             expected_token = os.getenv("VERIFY_TOKEN")
+            print("From WhatsApp:", request.args.get("hub.verify_token"))
+            print("From ENV:", os.getenv("VERIFY_TOKEN"))
+
 
             if verify_token == expected_token:
                 return challenge, 200
