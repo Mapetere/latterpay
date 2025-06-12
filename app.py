@@ -49,6 +49,11 @@ def home():
     print("[INFO] Home route hit!")
     return "App is alive!"
 
+@app.route("/debug")
+def debug():
+    return f"Token: {os.getenv('VERIFY_TOKEN')}"
+
+
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
     try:
