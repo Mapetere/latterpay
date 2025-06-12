@@ -38,6 +38,12 @@ if not os.path.exists(PAYMENTS_FILE):
 
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
+
+    if request.method == "POST":
+            print("[DEBUG] Got POST")
+            print(request.get_json())
+            return "ok"  # Temporarily exit early to avoid error
+
     if request.method == "GET":
         if request.args.get("hub.verify_token") == os.getenv("VERIFY_TOKEN"):
             return request.args.get("hub.challenge")
@@ -51,11 +57,13 @@ def webhook():
     # Skip if not a message
     if not whatsapp.is_message(data):
         return "ok"
+   
+
 
     phone = whatsapp.get_mobile(data)
     name = whatsapp.get_name(data)
     msg = whatsapp.get_message(data).strip()
-
+       
    
     # Handle admin commands
     if phone == os.getenv("ADMIN_PHONE"):
@@ -73,7 +81,7 @@ def webhook():
     # Initialize new session
     if phone not in sessions:
         initialize_session(phone, name)
-        
+        return "ok"
     
     # Update session activity
     sessions[phone]["last_active"] = datetime.now()
@@ -97,33 +105,14 @@ def webhook():
 
 import requests
 
-def register_phone_number(phone_number_id, access_token, pin):
-    access_token = ACCESS_TOKEN
-    url = f'https://graph.facebook.com/v22.0/{666157656583239
-    }/register'
-    headers = {
-        'Authorization': f'Bearer {access_token}',
-        'Content-Type': 'application/json'
-    }
-    payload = {
-        "messaging_product": "whatsapp",
-        "pin": pin
-    }
-    
-    response = requests.post(url, headers=headers, json=payload)
-    
-    print(f"Status code: {response.status_code}")
-    print("Response body:")
-    print(response.text)
-    
-    return response
+
 
 if __name__ == "__main__":
     PHONE_NUMBER_ID = " 666157656583239"
     ACCESS_TOKEN = "EAAIrEZAia0v8BO5xHnuGXNrzsBTgqzlTkKyjFFfDll46bMGVzoXV3mJjq9NLAwsTd8RPREz6grYGD3musybZAjK1Uy46H1Q2vcVyWL2fehKUtZC6S6QwdsLWeckZBIXG4WaWbcwtbhoUI4LDy6G5WyNlow82MBBWkbtwd1mCSVEP9sIuDEhLinmug5PBLmKMXgZDZD"
     PIN = "123456"  # Use your PIN here
     
-    register_phone_number(PHONE_NUMBER_ID, ACCESS_TOKEN,PIN)
+    
     
     from services.cleanup import cleanup_expired_donation_types
     from services.setup import setup_scheduled_reports

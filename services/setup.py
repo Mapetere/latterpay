@@ -59,3 +59,25 @@ def send_payment_report_to_finance():
     except Exception as e:
         print(f" Error in send_payment_report_to_finance: {e}")
         return False
+
+
+def register_phone_number(phone_number_id, access_token, pin):
+    access_token = ACCESS_TOKEN
+    url = f'https://graph.facebook.com/v22.0/{666157656583239
+    }/register'
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "pin": pin
+    }
+    
+    response = requests.post(url, headers=headers, json=payload)
+    
+    print(f"Status code: {response.status_code}")
+    print("Response body:")
+    print(response.text)
+    
+    return response
