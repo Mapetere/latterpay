@@ -3,5 +3,6 @@ fpdf
 requests
 pandas
 flask
+gunicorn
 python-dotenv
 apscheduler
