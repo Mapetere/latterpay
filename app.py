@@ -54,7 +54,11 @@ def webhook():
             print("[DEBUG] Got POST")
             print(request.get_json())
 
+            
             data = request.get_json()
+            if not data:
+                print("[WARN] No JSON received")
+                return "ok"
 
             # Skip if not a message
             if not whatsapp.is_message(data):
@@ -111,5 +115,7 @@ import os
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
+    print(f"🌍 Flask app running on port {port}")
+    
     app.run(host="0.0.0.0", port=port)
 
