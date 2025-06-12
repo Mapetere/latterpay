@@ -16,7 +16,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
 COPY . .
 
 # Expose port (Flask default is 5000)
-EXPOSE 5000
+EXPOSE 8080
 
 # Command to run your app
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]
