@@ -45,55 +45,43 @@ except Exception as e:
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
     try:
-       if request.method == "POST":
+        if request.method == "GET":
+            if request.args.get("hub.verify_token") == os.getenv("VERIFY_TOKEN"):
+                return request.args.get("hub.challenge")
+            return "Invalid verify token", 403
+
+        if request.method == "POST":
             print("[DEBUG] Got POST")
             print(request.get_json())
-              # Temporarily exit early to avoid error
 
-            if request.method == "GET":
-                if request.args.get("hub.verify_token") == os.getenv("VERIFY_TOKEN"):
-                    return request.args.get("hub.challenge")
-                return "Invalid verify token", 403
-            
-            print("[WEBHOOK] POST triggered")
             data = request.get_json()
-            
-        
 
             # Skip if not a message
             if not whatsapp.is_message(data):
                 return "ok"
-        
-
 
             phone = whatsapp.get_mobile(data)
             name = whatsapp.get_name(data)
             msg = whatsapp.get_message(data).strip()
-            
-        
-            # Handle admin commands
+
+            # Admin commands
             if phone == os.getenv("ADMIN_PHONE"):
                 return AdminService.handle_admin_command(phone, msg) or "ok"
 
-            # Check session timeout
             if check_session_timeout(phone):
                 return "ok"
 
-            # Handle cancellation
             if msg.lower() == "cancel":
                 cancel_session(phone)
                 return "ok"
 
-            # Initialize new session
             if phone not in sessions:
                 initialize_session(phone, name)
                 return "ok"
-            
-            # Update session activity
+
             sessions[phone]["last_active"] = datetime.now()
             session = sessions[phone]
 
-            # Route through session steps
             step_handlers = {
                 "name": handle_name_step,
                 "amount": handle_amount_step,
@@ -104,10 +92,10 @@ def webhook():
             }
 
             if session["step"] in step_handlers:
-                
                 return step_handlers[session["step"]](phone, msg, session)
-            
+
             return "Invalid session step", 400
+
     except Exception as e:
         print(f"[ERROR IN WEBHOOK] {e}")
         return "fail", 500
