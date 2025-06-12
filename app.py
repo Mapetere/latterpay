@@ -95,9 +95,36 @@ def webhook():
     
     return "Invalid session step", 400
 
-   
+import requests
 
-if __name__ == "__main__":
+def register_phone_number(phone_number_id, access_token, pin):
+    access_token = ACCESS_TOKEN
+    url = f'https://graph.facebook.com/v22.0/{666157656583239
+    }/register'
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "pin": pin
+    }
+    
+    response = requests.post(url, headers=headers, json=payload)
+    
+    print(f"Status code: {response.status_code}")
+    print("Response body:")
+    print(response.text)
+    
+    return response
+
+if __name__ == "_main_":
+    PHONE_NUMBER_ID = " 666157656583239"
+    ACCESS_TOKEN = "EAAIrEZAia0v8BO5xHnuGXNrzsBTgqzlTkKyjFFfDll46bMGVzoXV3mJjq9NLAwsTd8RPREz6grYGD3musybZAjK1Uy46H1Q2vcVyWL2fehKUtZC6S6QwdsLWeckZBIXG4WaWbcwtbhoUI4LDy6G5WyNlow82MBBWkbtwd1mCSVEP9sIuDEhLinmug5PBLmKMXgZDZD"
+    PIN = "123456"  # Use your PIN here
+    
+    register_phone_number(PHONE_NUMBER_ID, ACCESS_TOKEN,PIN)
+    
     from services.cleanup import cleanup_expired_donation_types
     from services.setup import setup_scheduled_reports
 
