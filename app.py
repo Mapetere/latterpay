@@ -70,55 +70,59 @@ def webhook():
             else:
                 return "Invalid verify token", 403
 
+        data = request.get_json()
+        print("[DEBUG] Webhook POST received")  
         if request.method == "POST":
             print("[DEBUG] Got POST")
             print(request.get_json())
+            print("Incoming webhook POST:", data)  # <-- Make sure this logs
+            return "EVENT_RECEIVED", 200
 
             
-            data = request.get_json()
-            if not data:
-                print("[WARN] No JSON received")
-                return "ok"
+           
+        if not data:
+            print("[WARN] No JSON received")
+            return "ok"
 
-            # Skip if not a message
-            if not whatsapp.is_message(data):
-                return "ok"
+        # Skip if not a message
+        if not whatsapp.is_message(data):
+            return "ok"
 
-            phone = whatsapp.get_mobile(data)
-            name = whatsapp.get_name(data)
-            msg = whatsapp.get_message(data).strip()
+        phone = whatsapp.get_mobile(data)
+        name = whatsapp.get_name(data)
+        msg = whatsapp.get_message(data).strip()
 
-            # Admin commands
-            if phone == os.getenv("ADMIN_PHONE"):
-                return AdminService.handle_admin_command(phone, msg) or "ok"
+        # Admin commands
+        if phone == os.getenv("ADMIN_PHONE"):
+            return AdminService.handle_admin_command(phone, msg) or "ok"
 
-            if check_session_timeout(phone):
-                return "ok"
+        if check_session_timeout(phone):
+            return "ok"
 
-            if msg.lower() == "cancel":
-                cancel_session(phone)
-                return "ok"
+        if msg.lower() == "cancel":
+            cancel_session(phone)
+            return "ok"
 
-            if phone not in sessions:
-                initialize_session(phone, name)
-                return "ok"
+        if phone not in sessions:
+            initialize_session(phone, name)
+            return "ok"
 
-            sessions[phone]["last_active"] = datetime.now()
-            session = sessions[phone]
+        sessions[phone]["last_active"] = datetime.now()
+        session = sessions[phone]
 
-            step_handlers = {
-                "name": handle_name_step,
-                "amount": handle_amount_step,
-                "donation_type": handle_donation_type_step,
-                "other_donation_details": handle_other,
-                "region": handle_region_step,
-                "note": handle_note_step
-            }
+        step_handlers = {
+            "name": handle_name_step,
+            "amount": handle_amount_step,
+            "donation_type": handle_donation_type_step,
+            "other_donation_details": handle_other,
+            "region": handle_region_step,
+            "note": handle_note_step
+        }
 
-            if session["step"] in step_handlers:
-                return step_handlers[session["step"]](phone, msg, session)
+        if session["step"] in step_handlers:
+            return step_handlers[session["step"]](phone, msg, session)
 
-            return "Invalid session step", 400
+        return "Invalid session step", 400
 
     except Exception as e:
         print(f"[ERROR IN WEBHOOK] {e}")
