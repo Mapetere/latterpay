@@ -51,7 +51,7 @@ def home():
     logger.info("Home endpoint accessed")
     return "WhatsApp Donation Service is running"
 
-@app.route("/webhook-debug", methods=["GET", "POST"])
+@app.route("/webhook", methods=["GET", "POST"])
 def webhook_debug():
     """Temporary debug endpoint"""
     print("\n=== INCOMING REQUEST ===")
