@@ -51,22 +51,26 @@ def home():
     logger.info("Home endpoint accessed")
     return "WhatsApp Donation Service is running"
 
-@app.route("/webhook", methods=["GET", "POST"])
-def webhook():
-    print("\n=== NEW REQUEST ===")
-    print("Method:", request.method)
-    print("Headers:", dict(request.headers))
-    print("Args:", dict(request.args))
+@app.route("/webhook-debug", methods=["GET", "POST"])
+def webhook_debug():
+    """Temporary debug endpoint"""
+    print("\n=== INCOMING REQUEST ===")
+    print(f"Method: {request.method}")
+    print(f"Headers: {dict(request.headers)}")
     
     if request.method == "POST":
-        print("Raw body:", request.data)
+        print(f"Raw data: {request.data.decode()}")
         try:
             data = request.get_json()
-            print("Parsed JSON:", data)
+            print(f"Parsed JSON: {json.dumps(data, indent=2)}")
         except Exception as e:
-            print("JSON parse error:", e)
+            print(f"JSON parse error: {str(e)}")
     
-    return jsonify({"status": "received"}), 200
+    return jsonify({
+        "status": "received",
+        "method": request.method,
+        "your_ip": request.remote_addr
+    }), 200
 
 def process_whatsapp_message(data):
     """Handle incoming WhatsApp messages"""
