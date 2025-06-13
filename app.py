@@ -97,37 +97,8 @@ def webhook_debug():
         return "Error", 500
 
 
-@app.route("/webhook/whatsapp", methods=["POST"])
-def webhook_whatsapp():
-    """Handle incoming WhatsApp messages"""
-    data = request.get_json()
-    logging.info(f"Received WhatsApp message: {data}")
-    
-    if not data:
-        logging.error("No data received in WhatsApp webhook")
-        return jsonify({"status": "error", "message": "No data received"}), 400
-
-    if whatsapp.is_message(data):
-        return handle_whatsapp_message(data)
-    
-    logging.warning("Received non-message data in WhatsApp webhook")
-    return jsonify({"status": "ignored"}), 200
 
 
-@app.route("/webhook/whatsapp", methods=["GET"])
-def verify_whatsapp_webhook():
-    """Verify WhatsApp webhook"""
-    verify_token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
-    expected_token = os.getenv("WHATSAPP_VERIFY_TOKEN")
-    
-    logging.info(f"WhatsApp webhook verification attempt. Received: {verify_token}, Expected: {expected_token}")
-    
-    if verify_token == expected_token:
-        logging.info("WhatsApp webhook verified successfully!")
-        return challenge, 200
-    logging.error("WhatsApp webhook verification failed!")
-    return "Verification failed", 403
 
 def handle_whatsapp_message(data):
     """Handle incoming WhatsApp messages"""

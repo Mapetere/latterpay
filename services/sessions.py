@@ -26,7 +26,6 @@ def check_session_timeout(phone):
 
 def initialize_session(phone, name):
     print(f"\nCreating NEW session for {phone} ({name})")
-    phone = whatsapp.get_mobile(phone)
     if phone not in config.sessions:
         config.sessions[phone] = {
             "step": "name",
