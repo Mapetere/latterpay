@@ -53,39 +53,20 @@ def home():
 
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
-    try:
-        if request.method == "GET":
-            verify_token = request.args.get("hub.verify_token")
-            challenge = request.args.get("hub.challenge")
-            expected_token = os.getenv("VERIFY_TOKEN")
-            
-            logger.info(f"Verification attempt - Received: {verify_token}, Expected: {expected_token}")
-            
-            if verify_token == expected_token:
-                logger.info("Webhook verified successfully")
-                return challenge, 200
-            logger.error("Webhook verification failed")
-            return "Verification failed", 403
-
-        elif request.method == "POST":
+    print("\n=== NEW REQUEST ===")
+    print("Method:", request.method)
+    print("Headers:", dict(request.headers))
+    print("Args:", dict(request.args))
+    
+    if request.method == "POST":
+        print("Raw body:", request.data)
+        try:
             data = request.get_json()
-            logger.debug(f"Raw POST data: {data}")
-            
-            # Skip if this is a Railway deployment notification
-            if data.get('type') == 'DEPLOY':
-                logger.info("Ignoring Railway deployment notification")
-                return jsonify({"status": "ignored"}), 200
-            
-            # Process WhatsApp messages
-            if not whatsapp.is_message(data):
-                logger.debug("Not a WhatsApp message, skipping")
-                return jsonify({"status": "not a WhatsApp message"}), 200
-                
-            return process_whatsapp_message(data)
-
-    except Exception as e:
-        logger.error(f"Webhook processing error: {str(e)}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+            print("Parsed JSON:", data)
+        except Exception as e:
+            print("JSON parse error:", e)
+    
+    return jsonify({"status": "received"}), 200
 
 def process_whatsapp_message(data):
     """Handle incoming WhatsApp messages"""
@@ -143,4 +124,4 @@ def process_whatsapp_message(data):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     logger.info(f"Starting server on port {port}")
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port,threaded=True,request_timeout=60)
