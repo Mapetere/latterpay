@@ -1,5 +1,5 @@
 import os
-from flask import requests
+from flask import request
 from apscheduler.schedulers.background import BackgroundScheduler
 from services.sendpdf import send_pdf
 from services.generatePR import generate_payment_report 
@@ -78,7 +78,7 @@ def register_phone_number(phone_number_id, access_token, pin):
         "pin": pin
     }
     
-    response = requests.post(url, headers=headers, json=payload)
+    response = request.post(url, headers=headers, json=payload)
     
     print(f"Status code: {response.status_code}")
     print("Response body:")
