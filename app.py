@@ -22,7 +22,7 @@ from services.donationflow import (
 )
 from services.adminservice import AdminService
 
-# Initialize logging
+
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -35,7 +35,8 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-# Initialize data files
+
+
 if not os.path.exists(CUSTOM_TYPES_FILE):
     with open(CUSTOM_TYPES_FILE, 'w') as f:
         json.dump([], f)
@@ -46,47 +47,109 @@ if not os.path.exists(PAYMENTS_FILE):
 
 app = Flask(__name__)
 
+
 @app.route("/")
 def home():
     logger.info("Home endpoint accessed")
     return "WhatsApp Donation Service is running"
 
+
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook_debug():
-    """Temporary debug endpoint"""
-    print("\n=== INCOMING REQUEST ===")
-    print(f"Method: {request.method}")
-    print(f"Headers: {dict(request.headers)}")
-    
-    if request.method == "POST":
-        print(f"Raw data: {request.data.decode()}")
-        try:
-            data = request.get_json()
-            print(f"Parsed JSON: {json.dumps(data, indent=2)}")
-        except Exception as e:
-            print(f"JSON parse error: {str(e)}")
-    
-    return jsonify({
-        "status": "received",
-        "method": request.method,
-        "your_ip": request.remote_addr
-    }), 200
+    try:
+        if request.method == "GET":
+        
+            verify_token = request.args.get("hub.verify_token")
+            challenge = request.args.get("hub.challenge")
+            expected_token = os.getenv("VERIFY_TOKEN")
+            
+            logging.info(f"Webhook verification attempt. Received: {verify_token}, Expected: {expected_token}")
+            
+            if verify_token == expected_token:
+                logging.info("Webhook verified successfully!")
+                return challenge, 200
+            logging.error("Webhook verification failed!")
+            return "Verification failed", 403
 
-def process_whatsapp_message(data):
+        elif request.method == "POST":
+            data = request.get_json()
+            logging.info(f"Incoming POST data: {data}")
+            
+        
+            if data.get('type') == 'DEPLOY':
+                logging.info("Received Railway deployment notification")
+                return jsonify({"status": "ignored"}), 200
+            
+           
+            try:
+                
+                if whatsapp.is_message(data):
+                    return handle_whatsapp_message(data)
+            except ImportError:
+                logging.error("WhatsApp module not found")
+            except Exception as e:
+                logging.error(f"Error processing WhatsApp message: {str(e)}")
+            
+            return jsonify({"status": "unhandled"}), 200
+        
+    except Exception as e:
+        logging.error(f"Webhook error: {str(e)}", exc_info=True)
+        return "Error", 500
+
+
+@app.route("/webhook/whatsapp", methods=["POST"])
+def webhook_whatsapp():
+    """Handle incoming WhatsApp messages"""
+    data = request.get_json()
+    logging.info(f"Received WhatsApp message: {data}")
+    
+    if not data:
+        logging.error("No data received in WhatsApp webhook")
+        return jsonify({"status": "error", "message": "No data received"}), 400
+
+    if whatsapp.is_message(data):
+        return handle_whatsapp_message(data)
+    
+    logging.warning("Received non-message data in WhatsApp webhook")
+    return jsonify({"status": "ignored"}), 200
+
+
+@app.route("/webhook/whatsapp", methods=["GET"])
+def verify_whatsapp_webhook():
+    """Verify WhatsApp webhook"""
+    verify_token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+    expected_token = os.getenv("WHATSAPP_VERIFY_TOKEN")
+    
+    logging.info(f"WhatsApp webhook verification attempt. Received: {verify_token}, Expected: {expected_token}")
+    
+    if verify_token == expected_token:
+        logging.info("WhatsApp webhook verified successfully!")
+        return challenge, 200
+    logging.error("WhatsApp webhook verification failed!")
+    return "Verification failed", 403
+
+def handle_whatsapp_message(data):
     """Handle incoming WhatsApp messages"""
     try:
+        
+        print("\n=== HANDLING WHATSAPP MESSAGE ===")
         phone = whatsapp.get_mobile(data)
         name = whatsapp.get_name(data)
         msg = whatsapp.get_message(data).strip()
-        
+        print(f"From: {phone}, Message: '{msg}'")
         logger.info(f"New message from {phone} ({name}): {msg}")
 
-        # Admin commands
+        if phone not in sessions:
+            logger.info(f"Initializing new session for {phone}")
+            initialize_session(phone, name)
+            return jsonify({"status": "new session started"}), 200
+
         if phone == os.getenv("ADMIN_PHONE"):
             logger.info("Processing admin command")
             return AdminService.handle_admin_command(phone, msg) or jsonify({"status": "processed"}), 200
 
-        # Session management
+      
         if check_session_timeout(phone):
             logger.info(f"Session timeout for {phone}")
             return jsonify({"status": "session timeout"}), 200
@@ -96,12 +159,8 @@ def process_whatsapp_message(data):
             cancel_session(phone)
             return jsonify({"status": "session cancelled"}), 200
 
-        if phone not in sessions:
-            logger.info(f"Initializing new session for {phone}")
-            initialize_session(phone, name)
-            return jsonify({"status": "new session started"}), 200
-
-        # Update session and process message
+       
+     
         sessions[phone]["last_active"] = datetime.now()
         session = sessions[phone]
         

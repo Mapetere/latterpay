@@ -19,5 +19,5 @@ COPY . .
 EXPOSE 8080
 
 # Command to run your app
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]
+CMD ["python" , "app.py"]
 

@@ -25,6 +25,7 @@ def check_session_timeout(phone):
     return False
 
 def initialize_session(phone, name):
+    print(f"\nCreating NEW session for {phone} ({name})")
     phone = whatsapp.get_mobile(phone)
     if phone not in config.sessions:
         config.sessions[phone] = {
@@ -32,6 +33,8 @@ def initialize_session(phone, name):
             "data": {},
             "last_active": datetime.now()
         }
+        print(f"Current sessions: {config.sessions}")
+
         whatsapp.send_message(
             f"Good day {name}!\n"
             "I'm latterpay, here to assist you with your ecocash payments to Latter Rain Church(Zimbabwe).\n\n"
