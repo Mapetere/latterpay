@@ -19,7 +19,7 @@ def check_session_timeout(phone):
     """Returns True if session expired"""
     if phone in config.sessions:
         last_active = config.sessions[phone].get("last_active")
-        if last_active and (datetime.now() - last_active) > timedelta(minutes=15):
+        if last_active and (datetime.now() - last_active) > timedelta(minutes=5):
             cancel_session(phone)
             return True
     return False
@@ -37,7 +37,7 @@ def initialize_session(phone, name):
         whatsapp.send_message(
             f"Good day {name}!\n"
             "I'm latterpay, here to assist you with your ecocash payments to Latter Rain Church(Zimbabwe).\n\n"
-            "To begin , please enter *payee full name:*  ",
+            "To begin , please enter  *payee full name:*  ",
             phone
         )
 

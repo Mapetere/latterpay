@@ -80,81 +80,70 @@ def webhook_debug():
                 logging.info("Received Railway deployment notification")
                 return jsonify({"status": "ignored"}), 200
             
-           
-            try:
-                
-                if whatsapp.is_message(data):
-                    return handle_whatsapp_message(data)
-            except ImportError:
-                logging.error("WhatsApp module not found")
-            except Exception as e:
-                logging.error(f"Error processing WhatsApp message: {str(e)}")
+            if not data or not isinstance(data, dict):
+                logging.error("Invalid data received in POST request")
+                logger.error(f"Received data: {data}")
+                return jsonify({"status": "error", "message": "Invalid data"}), 400
+          
+            if whatsapp.is_message(data):
+                print("\n=== HANDLING WHATSAPP MESSAGE ===")
+                phone = whatsapp.get_mobile(data)
+                name = whatsapp.get_name(data)
+                msg = whatsapp.get_message(data).strip()
+                print(f"From: {phone}, Message: '{msg}'")
+                logger.info(f"New message from {phone} ({name}): {msg}")
+
+            if phone not in sessions:
+                logger.info(f"Initializing new session for {phone}")
+                initialize_session(phone, name)
+                return jsonify({"status": "new session started"}), 200
+
+            if phone == os.getenv("ADMIN_PHONE"):
+                logger.info("Processing admin command")
+                return AdminService.handle_admin_command(phone, msg) or jsonify({"status": "processed"}), 200
+
             
-            return jsonify({"status": "unhandled"}), 200
-        
-    except Exception as e:
-        logging.error(f"Webhook error: {str(e)}", exc_info=True)
-        return "Error", 500
+            if check_session_timeout(phone):
+                logger.info(f"Session timeout for {phone}")
+                return jsonify({"status": "session timeout"}), 200
 
+            if msg.lower() == "cancel":
+                logger.info(f"Cancelling session for {phone}")
+                cancel_session(phone)
+                return jsonify({"status": "session cancelled"}), 200
 
+            
+            
+            sessions[phone]["last_active"] = datetime.now()
+            session = sessions[phone]
+            
+            step_handlers = {
+                "name": handle_name_step,
+                "amount": handle_amount_step,
+                "donation_type": handle_donation_type_step,
+                "other_donation_details": handle_other,
+                "region": handle_region_step,
+                "note": handle_note_step
+            }
 
+            if session["step"] in step_handlers:
+                logger.info(f"Processing step '{session['step']}' for {phone}")
+                return step_handlers[session["step"]](phone, msg, session)
 
-
-def handle_whatsapp_message(data):
-    """Handle incoming WhatsApp messages"""
-    try:
-        
-        print("\n=== HANDLING WHATSAPP MESSAGE ===")
-        phone = whatsapp.get_mobile(data)
-        name = whatsapp.get_name(data)
-        msg = whatsapp.get_message(data).strip()
-        print(f"From: {phone}, Message: '{msg}'")
-        logger.info(f"New message from {phone} ({name}): {msg}")
-
-        if phone not in sessions:
-            logger.info(f"Initializing new session for {phone}")
-            initialize_session(phone, name)
-            return jsonify({"status": "new session started"}), 200
-
-        if phone == os.getenv("ADMIN_PHONE"):
-            logger.info("Processing admin command")
-            return AdminService.handle_admin_command(phone, msg) or jsonify({"status": "processed"}), 200
-
-      
-        if check_session_timeout(phone):
-            logger.info(f"Session timeout for {phone}")
-            return jsonify({"status": "session timeout"}), 200
-
-        if msg.lower() == "cancel":
-            logger.info(f"Cancelling session for {phone}")
-            cancel_session(phone)
-            return jsonify({"status": "session cancelled"}), 200
-
-       
-     
-        sessions[phone]["last_active"] = datetime.now()
-        session = sessions[phone]
-        
-        step_handlers = {
-            "name": handle_name_step,
-            "amount": handle_amount_step,
-            "donation_type": handle_donation_type_step,
-            "other_donation_details": handle_other,
-            "region": handle_region_step,
-            "note": handle_note_step
-        }
-
-        if session["step"] in step_handlers:
-            logger.info(f"Processing step '{session['step']}' for {phone}")
-            return step_handlers[session["step"]](phone, msg, session)
-
-        logger.error(f"Invalid session step for {phone}: {session['step']}")
-        return jsonify({"status": "error", "message": "Invalid session step"}), 400
+            logger.error(f"Invalid session step for {phone}: {session['step']}")
+            return jsonify({"status": "error", "message": "Invalid session step"}), 400
 
     except Exception as e:
-        logger.error(f"Message processing error: {str(e)}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+                logger.error(f"Message processing error: {str(e)}", exc_info=True)
+                return jsonify({"status": "error", "message": str(e)}), 500
 
+  
+
+
+
+
+        
+        
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8010))
     logger.info(f"Starting server on port {port}")
