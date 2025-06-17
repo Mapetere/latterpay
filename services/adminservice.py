@@ -115,21 +115,18 @@ class AdminService:
 
     @staticmethod
     def handle_admin_command(phone,msg):
-    # 🧑🏾‍💼 Admin-only commands (handle early and exit)
-        if phone == os.getenv("ADMIN_PHONE"):
-            if msg == "/admin":
-                whatsapp.send_message("⚠️ You're the admin, but continuing as a donor. Type /admin to see admin commands.", phone)
-                whatsapp.send_message(
-                    "👩🏾‍💼 *Admin Panel*\n"
-                    "Use the following commands:\n"
-                    "• /report pdf or /report excel\n"
-                    "• /approve <user> <duration>\n"
-                    "• /session — View current session state",
-                    phone
-                )
-                return "ok"
+            whatsapp.send_message("⚠️ You're the admin, but continuing as a donor. Type /admin to see admin commands.", phone)
+            whatsapp.send_message(
+                "👩🏾‍💼 *Admin Panel*\n"
+                "Use the following commands:\n"
+                "• /report pdf or /report excel\n"
+                "• /approve <user> <duration>\n"
+                "• /session — View current session state",
+                phone
+            )
+    
 
-            elif msg == "/report pdf":
+            if msg == "/report pdf":
                 send_payment_report_to_finance("pdf")
                 whatsapp.send_message("✅ PDF report sent to finance.", phone)
                 return "ok"
