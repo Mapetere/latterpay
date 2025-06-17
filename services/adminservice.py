@@ -118,9 +118,9 @@ class AdminService:
             whatsapp.send_message(
                 "👩🏾‍💼 *Admin Panel*\n"
                 "Use the following commands:\n"
-                "• /report pdf or /report excel\n"
-                "• /session — View current session state",
-                phone
+                "• /report pdf   (_View the payment report in pdf format_)\n"
+                "• /report excel  (_View the payment report in excel format__\n"
+                
             )
     
 
