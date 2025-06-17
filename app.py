@@ -72,10 +72,16 @@ def webhook_debug():
             return "Verification failed", 403
 
         elif request.method == "POST":
-            data = request.get_json()
-            logging.info(f"Incoming POST data: {data}")
+            if request.is_json:
+                data = request.get_json()
+                logging.info(f"Incoming POST data: {data}")
             
-        
+            else:
+                data = request.data 
+                print(data.decode('utf-8')) 
+          
+           
+
             if data.get('type') == 'DEPLOY':
                 logging.info("Received Railway deployment notification")
                 return jsonify({"status": "ignored"}), 200
@@ -93,10 +99,10 @@ def webhook_debug():
                 print(f"From: {phone}, Message: '{msg}'")
                 logger.info(f"New message from {phone} ({name}): {msg}")
 
-            if phone not in sessions:
-                logger.info(f"Initializing new session for {phone}")
-                initialize_session(phone, name)
-                return jsonify({"status": "new session started"}), 200
+                if phone not in sessions:
+                    logger.info(f"Initializing new session for {phone}")
+                    initialize_session(phone, name)
+                    return jsonify({"status": "new session started"}), 200
 
             if phone == os.getenv("ADMIN_PHONE"):
                 logger.info("Processing admin command")
