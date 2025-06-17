@@ -77,12 +77,18 @@ def webhook_debug():
                 data = request.get_json()
                 logging.info(f"Incoming JSON POST data: {data}")
             else:
-                raw_data = request.data.decode("utf-8")
-                logging.info(f"Incoming raw POST data: {raw_data}")
                 try:
-                    data = json.loads(raw_data)  # Try to parse it manually
-                except Exception as e:
-                    logging.warning("Raw data is not valid JSON. Skipping parsing.")
+                    raw_data = request.data.decode("utf-8")
+                    logging.info(f"Incoming RAW POST data: {raw_data}")
+                    data = json.loads(raw_data)
+                except Exception as decode_err:
+                    logging.error(f"Failed to decode raw POST data: {decode_err}")
+                    return jsonify({"status": "error", "message": "Invalid data format"}), 400
+
+            if data.get("type") == "DEPLOY":
+                logging.info("Received Railway deployment notification")
+                return jsonify({"status": "ignored"}), 200
+
 
             # Handle Railway Deploy Notification
             if isinstance(data, dict) and data.get('type') == 'DEPLOY':
