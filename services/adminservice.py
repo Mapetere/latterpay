@@ -116,7 +116,7 @@ class AdminService:
     def handle_admin_command(phone,msg):
             whatsapp.send_message("⚠️ *You're the admin, but continuing as a donor.*\n Type /admin to see admin commands.", phone)
             whatsapp.send_message(
-                "👩🏾‍💼 *Admin Panel*\n"
+                "👩🏾‍💼 *Admin Panel*\n\n"
                 "Use the following commands:\n"
                 "• /report pdf   (_View the payment report in pdf format_)\n"
                 "• /report excel  (_View the payment report in excel format__\n"
