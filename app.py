@@ -58,13 +58,12 @@ def home():
 def webhook_debug():
     try:
         if request.method == "GET":
-        
             verify_token = request.args.get("hub.verify_token")
             challenge = request.args.get("hub.challenge")
             expected_token = os.getenv("VERIFY_TOKEN")
-            
+
             logging.info(f"Webhook verification attempt. Received: {verify_token}, Expected: {expected_token}")
-            
+
             if verify_token == expected_token:
                 logging.info("Webhook verified successfully!")
                 return challenge, 200
@@ -72,76 +71,80 @@ def webhook_debug():
             return "Verification failed", 403
 
         elif request.method == "POST":
+            data = None
+
             if request.is_json:
                 data = request.get_json()
-                logging.info(f"Incoming POST data: {data}")
-            
+                logging.info(f"Incoming JSON POST data: {data}")
             else:
-                data = request.data 
-                print(data.decode('utf-8')) 
-          
-           
+                raw_data = request.data.decode("utf-8")
+                logging.info(f"Incoming raw POST data: {raw_data}")
+                try:
+                    data = json.loads(raw_data)  # Try to parse it manually
+                except Exception as e:
+                    logging.warning("Raw data is not valid JSON. Skipping parsing.")
 
-            if data.get('type') == 'DEPLOY':
+            # Handle Railway Deploy Notification
+            if isinstance(data, dict) and data.get('type') == 'DEPLOY':
                 logging.info("Received Railway deployment notification")
                 return jsonify({"status": "ignored"}), 200
-            
-            if not data or not isinstance(data, dict):
-                logging.error("Invalid data received in POST request")
-                logger.error(f"Received data: {data}")
-                return jsonify({"status": "error", "message": "Invalid data"}), 400
-          
+
+            # Ignore malformed or irrelevant data
+            if not isinstance(data, dict):
+                logging.warning("Skipping non-dictionary data")
+                return jsonify({"status": "ignored"}), 200
+
+            # Handle WhatsApp Message
             if whatsapp.is_message(data):
-                print("\n=== HANDLING WHATSAPP MESSAGE ===")
+                logging.info("\n=== HANDLING WHATSAPP MESSAGE ===")
                 phone = whatsapp.get_mobile(data)
                 name = whatsapp.get_name(data)
                 msg = whatsapp.get_message(data).strip()
-                print(f"From: {phone}, Message: '{msg}'")
-                logger.info(f"New message from {phone} ({name}): {msg}")
+                logging.info(f"New message from {phone} ({name}): '{msg}'")
 
                 if phone not in sessions:
-                    logger.info(f"Initializing new session for {phone}")
+                    logging.info(f"Initializing new session for {phone}")
                     initialize_session(phone, name)
                     return jsonify({"status": "new session started"}), 200
 
-            if phone == os.getenv("ADMIN_PHONE"):
-                logger.info("Processing admin command")
-                return AdminService.handle_admin_command(phone, msg) or jsonify({"status": "processed"}), 200
+                if phone == os.getenv("ADMIN_PHONE"):
+                    logging.info("Processing admin command")
+                    return AdminService.handle_admin_command(phone, msg) or jsonify({"status": "processed"}), 200
 
-            
-            if check_session_timeout(phone):
-                logger.info(f"Session timeout for {phone}")
-                return jsonify({"status": "session timeout"}), 200
+                if check_session_timeout(phone):
+                    logging.info(f"Session timeout for {phone}")
+                    return jsonify({"status": "session timeout"}), 200
 
-            if msg.lower() == "cancel":
-                logger.info(f"Cancelling session for {phone}")
-                cancel_session(phone)
-                return jsonify({"status": "session cancelled"}), 200
+                if msg.lower() == "cancel":
+                    logging.info(f"Cancelling session for {phone}")
+                    cancel_session(phone)
+                    return jsonify({"status": "session cancelled"}), 200
 
-            
-            
-            sessions[phone]["last_active"] = datetime.now()
-            session = sessions[phone]
-            
-            step_handlers = {
-                "name": handle_name_step,
-                "amount": handle_amount_step,
-                "donation_type": handle_donation_type_step,
-                "other_donation_details": handle_other,
-                "region": handle_region_step,
-                "note": handle_note_step
-            }
+                sessions[phone]["last_active"] = datetime.now()
+                session = sessions[phone]
 
-            if session["step"] in step_handlers:
-                logger.info(f"Processing step '{session['step']}' for {phone}")
-                return step_handlers[session["step"]](phone, msg, session)
+                step_handlers = {
+                    "name": handle_name_step,
+                    "amount": handle_amount_step,
+                    "donation_type": handle_donation_type_step,
+                    "other_donation_details": handle_other,
+                    "region": handle_region_step,
+                    "note": handle_note_step
+                }
 
-            logger.error(f"Invalid session step for {phone}: {session['step']}")
-            return jsonify({"status": "error", "message": "Invalid session step"}), 400
+                if session["step"] in step_handlers:
+                    logging.info(f"Processing step '{session['step']}' for {phone}")
+                    return step_handlers[session["step"]](phone, msg, session)
+
+                logging.error(f"Invalid session step for {phone}: {session['step']}")
+                return jsonify({"status": "error", "message": "Invalid session step"}), 400
+
+            logging.info("Received POST that is not a WhatsApp message.")
+            return jsonify({"status": "ignored"}), 200
 
     except Exception as e:
-                logger.error(f"Message processing error: {str(e)}", exc_info=True)
-                return jsonify({"status": "error", "message": str(e)}), 500
+        logger.error(f"Message processing error: {str(e)}", exc_info=True)
+        return jsonify({"status": "error", "message": str(e)}), 500
 
   
 
