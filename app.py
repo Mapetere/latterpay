@@ -45,16 +45,16 @@ if not os.path.exists(PAYMENTS_FILE):
     with open(PAYMENTS_FILE, 'w') as f:
         json.dump([], f)
 
-app = Flask(__name__)
+latterpay = Flask(__name__)
 
 
-@app.route("/")
+@latterpay.route("/")
 def home():
     logger.info("Home endpoint accessed")
     return "WhatsApp Donation Service is running"
 
 
-@app.route("/webhook", methods=["GET", "POST"])
+@latterpay.route("/webhook", methods=["GET", "POST"])
 def webhook_debug():
     try:
         if request.method == "GET":
@@ -162,4 +162,4 @@ def webhook_debug():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8010))
     logger.info(f"Starting server on port {port}")
-    app.run(host="0.0.0.0", port=port)
+    latterpay.run(host="0.0.0.0", port=port)
