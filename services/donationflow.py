@@ -21,7 +21,7 @@ def handle_incoming_message(phone, msg):
 
 
 def handle_name_step(phone, msg, session):
-    phone = whatsapp.get_mobile(phone)
+    
     if phone not in sessions:
         sessions[phone] = {
             "step": "name",
