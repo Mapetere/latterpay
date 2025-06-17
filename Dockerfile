@@ -16,7 +16,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
 COPY . .
 
 # Expose port (Flask default is 5000)
-EXPOSE 8080
+EXPOSE 8010
 
 # Command to run your app
 CMD ["python" , "app.py"]
