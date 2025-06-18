@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from datetime import datetime
 import os
 import json
+from paynow import Paynow
 import sys
 import logging
 from dotenv import load_dotenv
@@ -21,6 +22,10 @@ from services.donationflow import (
     handle_note_step  
 )
 from services.adminservice import AdminService
+from services.recordpaymentdata import record_payment
+from services.setup import send_payment_report_to_finance
+
+
 
 
 logging.basicConfig(
@@ -160,8 +165,114 @@ def webhook_debug():
                     "donation_type": handle_donation_type_step,
                     "other_donation_details": handle_other,
                     "region": handle_region_step,
-                    "note": handle_note_step
+                    "note": handle_note_step,
+                    "payment_method": handle_payment_method_step,
+                    "awaiting_payment": handle_awaiting_payment_step
                 }
+                
+                pending_payments = {}
+
+                def handle_payment_method_step(phone, msg, session):
+                    payment_methods = {
+                        "1": "EcoCash",
+                        "2": "OneMoney",
+                        "3": "ZIPIT",
+                        "4": "USD Transfer"
+                    }
+
+                    method = payment_methods.get(msg.strip())
+
+                    if not method:
+                        whatsapp.send_message(
+                            "❌ Invalid selection.\nPlease reply with a number:\n"
+                            "1. EcoCash\n2. OneMoney\n3. ZIPIT\n4. USD Transfer",
+                            phone
+                        )
+                        return "ok"
+
+                    session["data"]["payment_method"] = method
+                    session["step"] = "awaiting_payment"
+
+                    # 💸 Set up Paynow client
+                    paynow = Paynow(
+                        integration_id=os.getenv("PAYNOW_ID"),
+                        integration_key=os.getenv("PAYNOW_KEY"),
+                        return_url="https://latterpay-production.app/payment-return",
+                        result_url="https://latterpay-production.app/payment-result"
+                    )
+
+                    d = session["data"]
+                    payment = paynow.create_payment(
+                        d.get("name", "Donor"),
+                        d.get("email", "donor@example.com")
+                    )
+
+                    payment.add(d.get("purpose", "Church Donation"), float(d.get("amount", 0)))
+
+                    # Send payment request
+                    response = paynow.send_mobile(
+                        payment,
+                        d.get("phone", phone),
+                        method.lower().replace(" ", "")
+                    )
+
+                    if response.success:
+                        session["poll_url"] = response.poll_url
+                        pending_payments[phone] = {
+                            "poll_url": response.poll_url,
+                            "start_time": datetime.now()
+                        }
+
+                        whatsapp.send_message(
+                            f"💳 Please complete your {method} payment using the link below:\n\n"
+                            f"{response.redirect_url}\n\n"
+                            "✅ I will monitor your payment for 10 minutes and confirm automatically.\n"
+                            "_Type *done* when finished if you'd like to speed things up._",
+                            phone
+                        )
+                    else:
+                        whatsapp.send_message(
+                            "❌ Failed to generate payment request. Please try again or use another method.",
+                            phone
+                        )
+
+                    return "ok"
+
+
+                def handle_awaiting_payment_step(phone, msg, session):
+                    if msg.strip().lower() != "done":
+                        whatsapp.send_message("⌛ Waiting for payment confirmation. Type *done* once you've paid.", phone)
+                        return "ok"
+
+                    poll_url = session.get("poll_url")
+                    if not poll_url:
+                        whatsapp.send_message("⚠️ No payment in progress. Please restart the process.", phone)
+                        return "ok"
+
+                    paynow = Paynow (
+                        integration_id=os.getenv("PAYNOW_ID"),
+                        integration_key=os.getenv("PAYNOW_KEY"),
+                        return_url=os.getenv("PAYNOW_RETURN_URL"),
+                        result_url=os.getenv("PAYNOW_RESULT_URL") 
+                        )
+
+                    status = paynow.poll_transaction(poll_url)
+
+                    if status.paid:
+                        
+                        record_payment(session["data"])
+                        send_payment_report_to_finance()
+                        whatsapp.send_message("✅ Payment confirmed! Your donation has been recorded. Thank you!", phone)
+
+                        del sessions[phone]
+                    else:
+                        whatsapp.send_message("❌ Payment not confirmed yet. Please wait a moment and try again.", phone)
+
+                    return "ok"
+
+
+
+
 
                 if session["step"] in step_handlers:
                     logging.info(f"Processing step '{session['step']}' for {phone}")

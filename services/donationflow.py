@@ -3,8 +3,6 @@ from datetime import datetime
 import json
 from services import config
 from services.config import CUSTOM_TYPES_FILE, donation_types as DONATION_TYPES
-from services.recordpaymentdata import record_payment
-from services.setup import send_payment_report_to_finance
 from services.pygwan_whatsapp import whatsapp
 from services.getdonationmenu import get_donation_menu, validate_donation_choice
 
@@ -161,27 +159,41 @@ def handle_other(phone, msg, session):
     return "ok"
 
 def handle_note_step(phone, msg, session):
-    """Finalize donation and send confirmation"""
+    """Finalize donation and move to payment step"""
     session["data"]["note"] = msg
     summary = session["data"]
-    
-    # Record payment
-    record_payment(summary)
-    
-    # Send confirmation
+
+    # Send summary message
     confirm_message = (
-        f"✅ *Thank you {summary['name']}!*\n\n"
+        f"✅ *Payee Name {summary['name']}!*\n\n"
         f"💰 *Amount:* {summary['amount']}\n"
         f"📌 *Purpose:* {summary['donation_type']}\n"
         f"🌍 *Congregation:* {summary['region']}\n"
         f"📝 *Note:* {summary['note']}\n\n"
-        "We will process your donation shortly."
+        "We will process your donation shortly.\n"
+        "type cancel if you wish to cancel session\n"
+        "➡️ *Choose a payment method to continue:*"
     )
+
+    # Send confirmation message
     whatsapp.send_message(confirm_message, phone)
-    
-    # Send report to finance
-    send_payment_report_to_finance()
-    
-    # Clear session
-    del sessions[phone]
+
+    # Ask for payment method
+    session["step"] = "payment_method"
+    whatsapp.send_message(
+        "💳 *Select Payment Method:*\n"
+        "1. EcoCash\n2. OneMoney\n3. ZIPIT\n4. USD Transfer\n\n"
+        "_Reply with the number corresponding to your preferred method_",
+        phone
+    )
+
     return "ok"
+
+   
+
+
+
+    
+
+
+
