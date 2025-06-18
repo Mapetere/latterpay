@@ -75,32 +75,57 @@ def webhook_debug():
 
             if request.is_json:
                 data = request.get_json()
-                logging.info(f"Incoming JSON POST data: {data}")
+
+                #  Detect if message is from my bot (echo)
+                if 'messages' in data['entry'][0]['changes'][0]['value']:
+                    msg_data = data['entry'][0]['changes'][0]['value']['messages'][0]
+
+                    if msg_data.get("from") == os.getenv("PHONE_NUMBER_ID"):
+                        print("🔁 Echo message from bot — ignored.")
+                        return "ok"
+
+                    if msg_data.get("from") == os.getenv("WHATSAPP_BOT_NUMBER"):
+                        print("🔁 Echo from bot number — ignored.")
+                        return "ok"
+
+                    if msg_data.get("type") == "text" and msg_data.get("text", {}).get("body") == "some known auto-response":
+                        print("🤖 Ignoring known auto-reply echo.")
+                        return "ok"
+
+                    if msg_data.get("echo"):
+                        print("🔁 Detected echo=True, ignoring...")
+                        return "ok"
+
+                    
+                    print("✅ Received valid message.")
+                    logging.info(f"Incoming JSON POST data: {json.dumps(data, indent=2)}")
+
             else:
                 try:
                     raw_data = request.data.decode("utf-8")
                     logging.info(f"Incoming RAW POST data: {raw_data}")
                     data = json.loads(raw_data)
+
                 except Exception as decode_err:
                     logging.error(f"Failed to decode raw POST data: {decode_err}")
-                    return jsonify({"status": "error", "message": "Invalid data format"}), 400
+                    return jsonify({"status": "error", "message": "Invalid raw JSON"}), 400
+
 
             if data.get("type") == "DEPLOY":
                 logging.info("Received Railway deployment notification")
                 return jsonify({"status": "ignored"}), 200
 
 
-            # Handle Railway Deploy Notification
             if isinstance(data, dict) and data.get('type') == 'DEPLOY':
                 logging.info("Received Railway deployment notification")
                 return jsonify({"status": "ignored"}), 200
 
-            # Ignore malformed or irrelevant data
+         
             if not isinstance(data, dict):
                 logging.warning("Skipping non-dictionary data")
                 return jsonify({"status": "ignored"}), 200
 
-            # Handle WhatsApp Message
+            
             if whatsapp.is_message(data):
                 logging.info("\n=== HANDLING WHATSAPP MESSAGE ===")
                 phone = whatsapp.get_mobile(data)

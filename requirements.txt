@@ -6,3 +6,4 @@ flask
 gunicorn
 python-dotenv
 apscheduler
+paynow
