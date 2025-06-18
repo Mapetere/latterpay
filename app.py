@@ -207,6 +207,7 @@ def webhook_debug():
                         d.get("email", "donor@example.com")
                     )
 
+
                     payment.add(d.get("purpose", "Church Donation"), float(d.get("amount", 0)))
 
                     # Send payment request
