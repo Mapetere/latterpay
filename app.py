@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify
 from datetime import datetime
 import os
 import json
+import sqlite3
+from sqlite3 import OperationalError
 from paynow import Paynow
 import sys
 import logging
@@ -53,6 +55,47 @@ if not os.path.exists(PAYMENTS_FILE):
 latterpay = Flask(__name__)
 
 
+def init_db():
+    conn = sqlite3.connect("botdata.db")
+    cursor = conn.cursor()
+
+    # Create table for sent message IDs
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS sent_messages (
+        msg_id TEXT PRIMARY KEY,
+        sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
+def is_echo_message(msg_id):
+    conn = sqlite3.connect("botdata.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM sent_messages WHERE msg_id = ?", (msg_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return result is not None
+
+def save_sent_message_id(msg_id):
+    conn = sqlite3.connect("botdata.db")
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR IGNORE INTO sent_messages (msg_id) VALUES (?)", (msg_id,))
+    conn.commit()
+    conn.close()
+
+def delete_old_ids():
+    conn = sqlite3.connect("botdata.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+    DELETE FROM sent_messages WHERE sent_at < datetime('now', '-15 minutes')
+    """)
+    conn.commit()
+    conn.close()
+
+
+@latterpay.before_request
 
 
 @latterpay.route("/")
@@ -83,29 +126,36 @@ def webhook_debug():
             if request.is_json:
                 data = request.get_json()
 
-                #  Detect if message is from my bot (echo)
-                if 'messages' in data['entry'][0]['changes'][0]['value']:
-                    msg_data = data['entry'][0]['changes'][0]['value']['messages'][0]
+                try:
+                    changes = data["entry"][0]["changes"][0]["value"]
+                    msg_data = changes.get("messages", [])[0]  # Might be empty if it's not a user message
 
-                    if msg_data.get("from") == os.getenv("PHONE_NUMBER_ID"):
-                        print("🔁 Echo message from bot — ignored.")
+                    if not msg_data:
                         return "ok"
 
-                    if msg_data.get("from") == os.getenv("WHATSAPP_BOT_NUMBER"):
-                        print("🔁 Echo from bot number — ignored.")
+                    msg_id = msg_data.get("id")
+                    msg_from = msg_data.get("from")
+
+                    # ✨ Echo check using message ID
+                    if is_echo_message(msg_id):
+                        print("🔁 Detected echo via DB. Ignoring.")
                         return "ok"
 
-                    if msg_data.get("type") == "text" and msg_data.get("text", {}).get("body") == "some known auto-response":
-                        print("🤖 Ignoring known auto-reply echo.")
-                        return "ok"
-
+                    # Optional: echo fallback checks
                     if msg_data.get("echo"):
-                        print("🔁 Detected echo=True, ignoring...")
+                        print("🔁 Detected echo=True. Ignoring.")
                         return "ok"
 
-                    
-                    print("✅ Received valid message.")
-                    logging.info(f"Incoming JSON POST data: {json.dumps(data, indent=2)}")
+                    if msg_from == os.getenv("PHONE_NUMBER_ID") or msg_from == os.getenv("WHATSAPP_BOT_NUMBER"):
+                        print("🔁 Message from own bot. Ignored.")
+                        return "ok"
+
+                    print("✅ Valid message received:", msg_data.get("text", {}).get("body"))
+                    # Proceed with your session logic here...
+
+                except (KeyError, IndexError, OperationalError) as e:
+                    logging.error(f"Error processing webhook: {e}")
+                    return "ok"
 
             else:
                 try:
@@ -310,6 +360,7 @@ def webhook_debug():
         
         
 if __name__ == "__main__":
+    init_db()    
     port = int(os.environ.get("PORT", 8010))
     logger.info(f"Starting server on port {port}")
     latterpay.run(host="0.0.0.0", port=port)
