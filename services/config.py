@@ -19,12 +19,12 @@ CUSTOM_TYPES_FILE = "custom_donation_types.json"
 PAYMENTS_FILE = "donation_payment.json"
 
 menu = [
-        "1. _*Monthly Contributions*_",
-        "2. _*August Conference*_",
-        "3. _*Youth Conference*_",
-        "4. _*Other*_ (describe new purpose)\n"
-
-        "5. *Learn more about donation types*"
+        "1. *Monthly Contributions*",
+        "2. *August Conference*",
+        "3. *Youth Conference*",
+        "4. *Construction Contributions",
+        "5. *Pastoral Support*"
+       
     ]
     
 

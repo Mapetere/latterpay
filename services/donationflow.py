@@ -46,8 +46,7 @@ def handle_amount_step(phone, msg, session):
         whatsapp.send_message(
             "*Please choose the purpose of your donation:*\n\n"
             f"{get_donation_menu()}\n\n"
-            "_Reply with the number (1-4)_\n"
-            "_Type *cancel* to exit_",
+            "_Reply with the number (1-5)_\n",
             phone
         )
     except ValueError:
