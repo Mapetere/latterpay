@@ -209,6 +209,7 @@ def webhook_debug():
                     "other_donation_details": handle_other,
                     "region": handle_region_step,
                     "note": handle_note_step,
+                    "ask_method":ask_for_payment_method,
                     "payment_method": handle_payment_method_step,
                     "payment_number": handle_payment_number_step,
                     "awaiting_payment": handle_awaiting_payment_step
@@ -228,6 +229,19 @@ def webhook_debug():
 
 
 
+
+
+
+def ask_for_payment_method(phone):
+    whatsapp.send_message(
+        "💳 *Select Payment Method:*\n"
+        "1. EcoCash\n"
+        "2. OneMoney\n"
+        "3. ZIPIT\n"
+        "4. USD Transfer\n\n"
+        "_Reply with the number corresponding to your preferred method_",
+        phone
+    )
 
 def handle_payment_method_step(phone, msg, session):
     payment_methods = {

@@ -155,16 +155,7 @@ def handle_other(phone, msg, session):
     return "ok"
 
 
-def ask_for_payment_method(phone):
-    whatsapp.send_message(
-        "💳 *Select Payment Method:*\n"
-        "1. EcoCash\n"
-        "2. OneMoney\n"
-        "3. ZIPIT\n"
-        "4. USD Transfer\n\n"
-        "_Reply with the number corresponding to your preferred method_",
-        phone
-    )
+
 
 def handle_note_step(phone, msg, session):
     """Finalize donation and move to payment step"""
@@ -188,10 +179,7 @@ def handle_note_step(phone, msg, session):
     whatsapp.send_message(confirm_message, phone)
 
     session["data"]["phone"] = phone
-    session["step"] = "payment_method"
-
-    ask_for_payment_method(phone)
-
+    
 
     return "ok"
 

@@ -22,7 +22,7 @@ menu = [
         "1. *Monthly Contributions*",
         "2. *August Conference*",
         "3. *Youth Conference*",
-        "4. *Construction Contributions",
+        "4. *Construction Contributions*",
         "5. *Pastoral Support*"
        
     ]
