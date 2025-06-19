@@ -85,8 +85,9 @@ def handle_donation_type_step(phone, msg, session):
     
     choice_num = response 
 
-    # Handle different selection types
-    if choice_num == 4:  # Other
+
+    """#" Handle different selection types
+    if choice_num == 6:  # Other
         session["step"] = "other_donation_details"
         whatsapp.send_message(
             "✏️ *New Donation Purpose*\n"
@@ -94,8 +95,10 @@ def handle_donation_type_step(phone, msg, session):
             "_Example: \"Building Fund\" or \"Pastoral Support\"_\n"
             "_Type *cancel* to go back_",
             phone
-        )
-    elif choice_num <= 3:  # Standard types
+        )"""
+    
+
+    if choice_num <= 5:  # Standard types
         session["data"]["donation_type"] = DONATION_TYPES[choice_num-1]
         session["step"] = "region"
         whatsapp.send_message(
@@ -104,6 +107,8 @@ def handle_donation_type_step(phone, msg, session):
             "_Type *cancel* to exit_",
             phone
         )
+
+        """
     else:  # Custom types (5+)
         with open(CUSTOM_TYPES_FILE, 'r') as f:
             custom_types = json.load(f)
@@ -116,7 +121,7 @@ def handle_donation_type_step(phone, msg, session):
             "_Type *cancel* to exit_",
             phone
         )
-    return "ok"
+    return "ok" """
 
 
 
