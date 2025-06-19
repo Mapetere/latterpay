@@ -90,6 +90,15 @@ def delete_old_ids():
     conn.close()
 
 
+
+def ask_for_payment_number(phone):
+    whatsapp.send_message(
+        "📲 *Enter the mobile number you'd like to use for payment.*\n"
+        "_Format: 077XXXXXXX or 26377XXXXXXX_",
+        phone
+    )
+
+
 @latterpay.route("/")
 def home():
     logger.info("Home endpoint accessed")
@@ -201,6 +210,7 @@ def webhook_debug():
                     "region": handle_region_step,
                     "note": handle_note_step,
                     "payment_method": handle_payment_method_step,
+                    "payment_number": handle_payment_number_step,
                     "awaiting_payment": handle_awaiting_payment_step
                 }
 
@@ -217,6 +227,8 @@ def webhook_debug():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
+
+
 def handle_payment_method_step(phone, msg, session):
     payment_methods = {
         "1": "EcoCash",
@@ -228,14 +240,22 @@ def handle_payment_method_step(phone, msg, session):
     method = payment_methods.get(msg.strip())
     if not method:
         whatsapp.send_message(
-            "❌ Invalid selection.\nPlease reply with a number:\n"
+            "❌ Invalid selection.\n\nPlease reply with a number:\n"
             "1. EcoCash\n2. OneMoney\n3. ZIPIT\n4. USD Transfer",
             phone
         )
         return "ok"
 
     session["data"]["payment_method"] = method
+
+
+    if method in ["EcoCash", "OneMoney"]:
+        session["step"] = "payment_number"
+        ask_for_payment_number(phone)
+        return "ok"
+    
     session["step"] = "awaiting_payment"
+
 
     paynow = Paynow(
         integration_id=os.getenv("PAYNOW_ID"),
@@ -249,7 +269,8 @@ def handle_payment_method_step(phone, msg, session):
     payment.add(d.get("purpose", "Church Donation"), float(d.get("amount", 0)))
 
     try:
-        response = paynow.send_mobile(payment, d.get("phone", phone), method.lower().replace(" ", ""))
+        method_string = method.lower().replace(" ", "")
+        response = paynow.send_mobile(payment, d.get("phone", phone),method_string)
     except Exception as paynow_error:
         logger.error(f"Paynow mobile payment error: {paynow_error}")
         whatsapp.send_message("⚠️ An error occurred while trying to initiate the payment. Please try again later.", phone)
@@ -267,7 +288,25 @@ def handle_payment_method_step(phone, msg, session):
     else:
         whatsapp.send_message("❌ Failed to generate payment request. Please try again.", phone)
 
+
+    
+
     return "ok"
+
+def handle_payment_number_step(phone, msg, session):
+    raw = msg.strip()
+    if raw.startswith("0"):
+        formatted = "263" + raw[1:]
+    elif raw.startswith("263"):
+        formatted = raw
+    else:
+        whatsapp.send_message("❌ Invalid number format. Please enter a number like *0771234567* or *263771234567*", phone)
+        return "ok"
+
+    session["data"]["phone"] = formatted
+    session["step"] = "awaiting_payment"
+
+    return handle_payment_method_step(phone, "proceed", session)  # or trigger payment directly here
 
 
 def handle_awaiting_payment_step(phone, msg, session):

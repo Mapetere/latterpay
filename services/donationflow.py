@@ -8,15 +8,6 @@ from services.getdonationmenu import get_donation_menu, validate_donation_choice
 
 sessions = config.sessions
 
-def handle_incoming_message(phone, msg):
-    if phone not in sessions:
-        sessions[phone] = {
-            "step": "name",
-            "data": {}
-        }
-        whatsapp.send_message("👋🏾 Hello! What is your name?", phone)
-        return
-
 
 def handle_name_step(phone, msg, session):
     
@@ -42,6 +33,7 @@ def handle_name_step(phone, msg, session):
         phone
     )
     return "ok"
+
 
 def handle_amount_step(phone, msg, session):
     """Validate amount and move to donation type selection"""
@@ -158,34 +150,44 @@ def handle_other(phone, msg, session):
     )
     return "ok"
 
+
+def ask_for_payment_method(phone):
+    whatsapp.send_message(
+        "💳 *Select Payment Method:*\n"
+        "1. EcoCash\n"
+        "2. OneMoney\n"
+        "3. ZIPIT\n"
+        "4. USD Transfer\n\n"
+        "_Reply with the number corresponding to your preferred method_",
+        phone
+    )
+
 def handle_note_step(phone, msg, session):
     """Finalize donation and move to payment step"""
     session["data"]["note"] = msg
     summary = session["data"]
 
-    # Send summary message
+   
     confirm_message = (
-        f"✅ *Payee Name {summary['name']}!*\n\n"
-        f"💰 *Amount:* {summary['amount']}\n"
-        f"📌 *Purpose:* {summary['donation_type']}\n"
-        f"🌍 *Congregation:* {summary['region']}\n"
-        f"📝 *Note:* {summary['note']}\n\n"
-        "We will process your donation shortly.\n"
-        "type cancel if you wish to cancel session\n"
-        "➡️ *Choose a payment method to continue:*"
+
+        "PAYMENT DETAILS:\n\n"
+        f"*Payee Name {summary['name']}!*\n"
+        f"*Amount:* {summary['amount']}\n"
+        f"*Purpose:* {summary['donation_type']}\n"
+        f"*Congregation:* {summary['region']}\n"
+        f"*Note:* {summary['note']}\n\n"
+        
+        "Kindly type *confirm* to proceed with the payment.\n"
     )
 
-    # Send confirmation message
+   
     whatsapp.send_message(confirm_message, phone)
 
-    # Ask for payment method
+    session["data"]["phone"] = phone
     session["step"] = "payment_method"
-    whatsapp.send_message(
-        "💳 *Select Payment Method:*\n"
-        "1. EcoCash\n2. OneMoney\n3. ZIPIT\n4. USD Transfer\n\n"
-        "_Reply with the number corresponding to your preferred method_",
-        phone
-    )
+
+    ask_for_payment_method(phone)
+
 
     return "ok"
 
