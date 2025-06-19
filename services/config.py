@@ -12,7 +12,7 @@ admin_phone = os.getenv("ADMIN_PHONE")
 sessions = {}
 
 
-donation_types = ["Monthly Contributions", "August Conference", "Youth Conference"]
+donation_types = ["Monthly Contributions", "August Conference", "Youth Conference", "Construction Contribution", "Pastoral Support"]
 donation_types.append("Other")
 
 CUSTOM_TYPES_FILE = "custom_donation_types.json"
@@ -22,7 +22,7 @@ menu = [
         "1. *Monthly Contributions*",
         "2. *August Conference*",
         "3. *Youth Conference*",
-        "4. *Construction Contributions*",
+        "4. *Construction Contribution*",
         "5. *Pastoral Support*"
        
     ]
