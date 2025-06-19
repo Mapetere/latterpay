@@ -218,13 +218,27 @@ def handle_donation_type_step(phone, msg, session):
         )"""
     
 
-    if choice_num <= 5:  # Standard types
-        session["data"]["donation_type"] = DONATION_TYPES[choice_num-1]
-        session["step"] = "region"
+    try:
+        choice_num = int(msg)
+        if 1 <= choice_num <= max_options:
+           
+            session["data"]["donation_type"] = DONATION_TYPES[choice_num - 1]
+            session["step"] = "region"
+            whatsapp.send_message(
+                "🌍 *Congregation Name*:\n"
+                "Please share your congregation\n\n"
+                "_Type *cancel* to exit_",
+                phone
+            )
+        else:
+            raise ValueError("Out of range")
+        
+
+    except ValueError:
         whatsapp.send_message(
-            "🌍 *Congregation Name*:\n"
-            "Please share your congregation\n\n"
-            "_Type *cancel* to exit_",
+            f"❌ *Invalid Selection*\nPlease choose a number from the list:\n\n" +
+            "\n".join(menu) +
+            "\n\n_Type *cancel* to exit_",
             phone
         )
 
