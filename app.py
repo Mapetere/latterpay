@@ -18,12 +18,16 @@ from services.sessions import (
 from services.recordpaymentdata import record_payment
 from services.setup import send_payment_report_to_finance
 from services.donationflow import (
-    handle_other,
     handle_name_step,
     handle_amount_step,
     handle_donation_type_step,
     handle_region_step,
-    handle_note_step
+    handle_note_step,
+    handle_confirmation_step,
+    handle_editing_fields,
+    handle_edit_command,
+    handle_user_message                   
+                    
 )
 from services.adminservice import AdminService
 
@@ -201,27 +205,30 @@ def webhook_debug():
 
                 sessions[phone]["last_active"] = datetime.now()
                 session = sessions[phone]
-
+                
                 step_handlers = {
                     "name": handle_name_step,
                     "amount": handle_amount_step,
                     "donation_type": handle_donation_type_step,
-                    "other_donation_details": handle_other,
                     "region": handle_region_step,
                     "note": handle_note_step,
-                    "ask_method":ask_for_payment_method,
+                    "awaiting_confirmation": handle_confirmation_step,
+                    "awaiting_user_method": ask_for_payment_method,
+                    "editing_fields": handle_editing_fields,
+                    "awaiting_edit": handle_edit_command,
                     "payment_method": handle_payment_method_step,
                     "payment_number": handle_payment_number_step,
                     "awaiting_payment": handle_awaiting_payment_step
                 }
 
                 step = session.get("step")
-                if step in step_handlers:
-                    return step_handlers[step](phone, msg, session)
+                handler = step_handlers.get(step)
 
-                return jsonify({"status": "error", "message": f"Unknown step: {step}"}), 400
-
-            return jsonify({"status": "ignored"}), 200
+                if handler:
+                    return handler(phone, msg, session)
+                else:
+                    # fallback: redirect to donationflow's state handler
+                    return handle_user_message(phone, msg, session)
 
     except Exception as e:
         logger.error(f"Message processing error: {str(e)}", exc_info=True)
