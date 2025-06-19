@@ -52,38 +52,6 @@ if not os.path.exists(PAYMENTS_FILE):
 
 latterpay = Flask(__name__)
 
-def handle_awaiting_payment_step(phone, msg, session):
-    if msg.strip().lower() != "done":
-        whatsapp.send_message("⌛ Waiting for payment confirmation. Type *done* once you've paid.", phone)
-        return "ok"
-
-    poll_url = session.get("poll_url")
-    if not poll_url:
-        whatsapp.send_message("⚠️ No payment in progress. Please restart the process.", phone)
-        return "ok"
-
-    paynow = Paynow (
-        integration_id=os.getenv("PAYNOW_ID"),
-        integration_key=os.getenv("PAYNOW_KEY"),
-        return_url=os.getenv("PAYNOW_RETURN_URL"),
-        result_url=os.getenv("PAYNOW_RESULT_URL") 
-        )
-
-    status = paynow.poll_transaction(poll_url)
-
-    if status.paid:
-        
-        record_payment(session["data"])
-        send_payment_report_to_finance()
-        whatsapp.send_message("✅ Payment confirmed! Your donation has been recorded. Thank you!", phone)
-
-        del sessions[phone]
-    else:
-        whatsapp.send_message("❌ Payment not confirmed yet. Please wait a moment and try again.", phone)
-
-    return "ok"
-
-
 
 
 
@@ -193,17 +161,44 @@ def webhook_debug():
                 sessions[phone]["last_active"] = datetime.now()
                 session = sessions[phone]
 
-                step_handlers = {
-                    "name": handle_name_step,
-                    "amount": handle_amount_step,
-                    "donation_type": handle_donation_type_step,
-                    "other_donation_details": handle_other,
-                    "region": handle_region_step,
-                    "note": handle_note_step,
-                    "payment_method": handle_payment_method_step,
-                    "awaiting_payment": handle_awaiting_payment_step
-                }
-                
+
+
+                def handle_awaiting_payment_step(phone, msg, session):
+                    if msg.strip().lower() != "done":
+                        whatsapp.send_message("⌛ Waiting for payment confirmation. Type *done* once you've paid.", phone)
+                        return "ok"
+
+                    poll_url = session.get("poll_url")
+                    if not poll_url:
+                        whatsapp.send_message("⚠️ No payment in progress. Please restart the process.", phone)
+                        return "ok"
+
+                    paynow = Paynow (
+                        integration_id=os.getenv("PAYNOW_ID"),
+                        integration_key=os.getenv("PAYNOW_KEY"),
+                        return_url=os.getenv("PAYNOW_RETURN_URL"),
+                        result_url=os.getenv("PAYNOW_RESULT_URL") 
+                        )
+
+                    status = paynow.poll_transaction(poll_url)
+
+                    if status.paid:
+                        
+                        record_payment(session["data"])
+                        send_payment_report_to_finance()
+                        whatsapp.send_message("✅ Payment confirmed! Your donation has been recorded. Thank you!", phone)
+
+                        del sessions[phone]
+                    else:
+                        whatsapp.send_message("❌ Payment not confirmed yet. Please wait a moment and try again.", phone)
+
+                    return "ok"
+
+
+
+
+
+
                 pending_payments = {}
 
                 def handle_payment_method_step(phone, msg, session):
@@ -274,6 +269,22 @@ def webhook_debug():
                     return "ok"
 
 
+
+
+                print("handle_payment_method_step is:", handle_payment_method_step)
+
+                step_handlers = {
+                    "name": handle_name_step,
+                    "amount": handle_amount_step,
+                    "donation_type": handle_donation_type_step,
+                    "other_donation_details": handle_other,
+                    "region": handle_region_step,
+                    "note": handle_note_step,
+                    "payment_method": handle_payment_method_step,
+                    "awaiting_payment": handle_awaiting_payment_step
+                }
+                
+                
                
 
 
