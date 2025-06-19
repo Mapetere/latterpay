@@ -11,7 +11,7 @@ def get_donation_menu():
             custom_types = json.load(f)
         
         now = datetime.now()
-        for i, item in enumerate(custom_types, start=5):
+        for i, item in enumerate(custom_types, start=6):
             if item["expires"] is None or datetime.fromisoformat(item["expires"]) > now:
                 config.menu.append(f"{i}. _*{item['description']}*_")
                 

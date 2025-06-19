@@ -25,6 +25,7 @@ def initiate_payment(name, email, phone, amount, reference="Donation"):
         }
     else:
         return {"status": "error", "message": response.message}
+    
 def check_payment_status(poll_url):
     response = paynow.poll(poll_url)
 
@@ -50,6 +51,7 @@ def get_payment_details(reference):
         }
     else:
         return {"status": "error", "message": payment.message}
+    
 def cancel_payment(reference):
     response = paynow.cancel_payment(reference)
 
