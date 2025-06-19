@@ -52,6 +52,40 @@ if not os.path.exists(PAYMENTS_FILE):
 
 latterpay = Flask(__name__)
 
+def handle_awaiting_payment_step(phone, msg, session):
+    if msg.strip().lower() != "done":
+        whatsapp.send_message("⌛ Waiting for payment confirmation. Type *done* once you've paid.", phone)
+        return "ok"
+
+    poll_url = session.get("poll_url")
+    if not poll_url:
+        whatsapp.send_message("⚠️ No payment in progress. Please restart the process.", phone)
+        return "ok"
+
+    paynow = Paynow (
+        integration_id=os.getenv("PAYNOW_ID"),
+        integration_key=os.getenv("PAYNOW_KEY"),
+        return_url=os.getenv("PAYNOW_RETURN_URL"),
+        result_url=os.getenv("PAYNOW_RESULT_URL") 
+        )
+
+    status = paynow.poll_transaction(poll_url)
+
+    if status.paid:
+        
+        record_payment(session["data"])
+        send_payment_report_to_finance()
+        whatsapp.send_message("✅ Payment confirmed! Your donation has been recorded. Thank you!", phone)
+
+        del sessions[phone]
+    else:
+        whatsapp.send_message("❌ Payment not confirmed yet. Please wait a moment and try again.", phone)
+
+    return "ok"
+
+
+
+
 
 @latterpay.route("/")
 def home():
@@ -240,39 +274,7 @@ def webhook_debug():
                     return "ok"
 
 
-                def handle_awaiting_payment_step(phone, msg, session):
-                    if msg.strip().lower() != "done":
-                        whatsapp.send_message("⌛ Waiting for payment confirmation. Type *done* once you've paid.", phone)
-                        return "ok"
-
-                    poll_url = session.get("poll_url")
-                    if not poll_url:
-                        whatsapp.send_message("⚠️ No payment in progress. Please restart the process.", phone)
-                        return "ok"
-
-                    paynow = Paynow (
-                        integration_id=os.getenv("PAYNOW_ID"),
-                        integration_key=os.getenv("PAYNOW_KEY"),
-                        return_url=os.getenv("PAYNOW_RETURN_URL"),
-                        result_url=os.getenv("PAYNOW_RESULT_URL") 
-                        )
-
-                    status = paynow.poll_transaction(poll_url)
-
-                    if status.paid:
-                        
-                        record_payment(session["data"])
-                        send_payment_report_to_finance()
-                        whatsapp.send_message("✅ Payment confirmed! Your donation has been recorded. Thank you!", phone)
-
-                        del sessions[phone]
-                    else:
-                        whatsapp.send_message("❌ Payment not confirmed yet. Please wait a moment and try again.", phone)
-
-                    return "ok"
-
-
-
+               
 
 
                 if session["step"] in step_handlers:
