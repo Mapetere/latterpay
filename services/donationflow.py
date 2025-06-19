@@ -8,6 +8,126 @@ from services.getdonationmenu import get_donation_menu, validate_donation_choice
 
 sessions = config.sessions
 
+def handle_user_message(phone, msg, session):
+    msg = msg.strip().lower()
+    state = session.get("state", "awaiting_name")
+
+    state_handlers = {
+        "awaiting_name": handle_name_step,
+        "awaiting_amount": handle_amount_step,
+        "awaiting_donation_type": handle_donation_type_step,
+        "awaiting_region": handle_region_step,
+        "awaiting_note": handle_note_step,
+        "awaiting_confirmation": handle_confirmation_step,
+        "awaiting_edit": handle_edit_command,
+        "editing_fields": handle_editing_fields,
+        "awaiting_user_method": ask_for_payment_method,
+
+    }
+
+
+    
+    handler = state_handlers.get(state, handle_unknown_state)
+    return handler(phone, msg, session)
+
+def handle_unknown_state(phone, msg, session):
+    whatsapp.send_message("⚠️ Hmm... I got lost. Let me reset your donation flow from the last known point.", phone)
+    
+    # I want it to recover gracefully
+    fallback_step = session.get("step", "name")
+    session["step"] = fallback_step
+
+    # I'll use  the correct handler
+    return handle_user_message(phone, msg, session)
+
+
+
+def ask_for_payment_method(phone):
+    whatsapp.send_message(
+        "💳 *Select Payment Method:*\n"
+        "1. EcoCash\n"
+        "2. OneMoney\n"
+        "3. ZIPIT\n"
+        "4. USD Transfer\n\n"
+        "_Reply with the number corresponding to your preferred method_",
+        phone
+    )
+
+
+def handle_edit_command(phone, session):
+    session["state"] = "editing_fields"
+    session["edit_queue"] = ["name", "amount", "donation_type", "region", "note"]
+    session["current_edit"] = session["edit_queue"].pop(0)
+
+    current_value = session["data"][session["current_edit"]]
+    whatsapp.send_message(
+        f"✏️ Let's update your details.\n\n"
+        f"Current *{session['current_edit']}*: {current_value}\n"
+        f"Send the new value or type *skip* to keep it.",
+        phone
+    )
+
+    return "editing_fields"
+
+
+def handle_editing_fields(phone, msg, session):
+    field = session.get("current_edit")
+
+    if not field:
+        whatsapp.send_message("⚠️ Unexpected error. Restarting edit flow.", phone)
+        return handle_edit_command(phone, session)
+
+    if msg.strip().lower() != "skip":
+        session["data"][field] = msg.strip().title()
+
+    if session["edit_queue"]:
+        session["current_edit"] = session["edit_queue"].pop(0)
+        current_value = session["data"][session["current_edit"]]
+        whatsapp.send_message(
+            f"Current *{session['current_edit']}*: {current_value}\n"
+            f"Send new value or type *skip* to keep it.",
+            phone
+        )
+        return "editing_fields"
+
+    
+    session.pop("current_edit", None)
+    session.pop("edit_queue", None)
+    session["state"] = "awaiting_confirmation"
+
+    summary = session["data"]
+    whatsapp.send_message(
+        "Here's your updated payment summary:\n\n"
+        f"*Name:* {summary['name']}\n"
+        f"*Amount:* {summary['amount']}\n"
+        f"*Purpose:* {summary['donation_type']}\n"
+        f"*Region:* {summary['region']}\n"
+        f"*Note:* {summary['note']}\n\n"
+        "Type *confirm* to proceed or *edit* to review again.",
+        phone
+    )
+
+    return "awaiting_confirmation"
+
+
+
+def handle_confirmation_step(phone, msg, session):
+    if msg == "confirm":
+        return "awaiting_user_method"
+    
+    elif msg == "edit":
+        return handle_edit_command(phone, session)
+
+
+    elif msg == "cancel":
+        whatsapp.send_message("❌ Donation cancelled. No worries, come back anytime!", phone)
+        from services.sessions import cancel_session
+        cancel_session(phone)
+
+    else:
+        whatsapp.send_message("Invalid option. Type *confirm*, *edit*, or *cancel*.", phone)
+        return "awaiting_confirmation"
+    
 
 def handle_name_step(phone, msg, session):
     
@@ -158,8 +278,14 @@ def handle_other(phone, msg, session):
 
 
 def handle_note_step(phone, msg, session):
+
+    msg = msg.strip().lower()
+
+    
     """Finalize donation and move to payment step"""
     session["data"]["note"] = msg
+    session["step"]="awaiting_confirmation"
+
     summary = session["data"]
 
    
@@ -176,12 +302,13 @@ def handle_note_step(phone, msg, session):
     )
 
    
+   
     whatsapp.send_message(confirm_message, phone)
 
-    session["data"]["phone"] = phone
+    
+    return "awaiting_confirmation"
     
 
-    return "ok"
 
    
 
