@@ -27,7 +27,7 @@ def handle_name_step(phone, msg, session):
     session["data"]["name"] = msg
     session["step"] = "amount"
     whatsapp.send_message(
-        "💰 *How much would you like to donate?*\n"
+        " *How much would you like to donate?*\n"
         "Enter amount (e.g. 5000)\n\n"
         "_Type *cancel* to exit_",
         phone
@@ -44,7 +44,7 @@ def handle_amount_step(phone, msg, session):
         session["step"] = "donation_type"
         
         whatsapp.send_message(
-            "🙏🏾 *Please choose the purpose of your donation:*\n\n"
+            "*Please choose the purpose of your donation:*\n\n"
             f"{get_donation_menu()}\n\n"
             "_Reply with the number (1-4)_\n"
             "_Type *cancel* to exit_",
