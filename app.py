@@ -13,6 +13,9 @@ from services.sessions import (
     cancel_session,
     initialize_session
 )
+from services.recordpaymentdata import record_payment
+from services.setup import send_payment_report_to_finance
+
 from services.donationflow import (
     handle_other,
     handle_name_step,
@@ -22,9 +25,6 @@ from services.donationflow import (
     handle_note_step  
 )
 from services.adminservice import AdminService
-from services.recordpaymentdata import record_payment
-from services.setup import send_payment_report_to_finance
-
 
 
 
