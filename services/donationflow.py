@@ -113,7 +113,7 @@ def handle_editing_fields(phone, msg, session):
 
 def handle_confirmation_step(phone, msg, session):
     if msg == "confirm":
-        return "awaiting_user_method"
+        return ask_for_payment_method(phone)
     
     elif msg == "edit":
         return handle_edit_command(phone, session)
@@ -306,7 +306,7 @@ def handle_note_step(phone, msg, session):
     whatsapp.send_message(confirm_message, phone)
 
     
-    return "awaiting_confirmation"
+    return "ok"
     
 
 
