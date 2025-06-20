@@ -109,6 +109,25 @@ def home():
     return "WhatsApp Donation Service is running"
 
 
+@latterpay.route("/payment-return")
+def payment_return():
+    return "<h2>Payment attempted. You may now return to WhatsApp.</h2>"
+
+
+
+@latterpay.route("/payment-result", methods=["POST"])
+def payment_result():
+    try:
+        raw_data = request.data.decode("utf-8")
+        logger.info("📩 Paynow Result Received: \n" + raw_data)
+        # Optionally parse and process here
+        return "OK"
+    except Exception as e:
+        logger.error(f"❌ Error handling Paynow result: {e}")
+        return "ERROR", 500
+
+
+
 @latterpay.route("/webhook", methods=["GET", "POST"])
 def webhook_debug():
     try:

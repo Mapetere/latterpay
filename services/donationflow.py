@@ -178,6 +178,8 @@ def handle_amount_step(phone, msg, session):
         )
     return "ok"
 
+
+
 def handle_donation_type_step(phone, msg, session):
     """Process donation type selection"""
     menu = get_donation_menu()
@@ -236,7 +238,8 @@ def handle_donation_type_step(phone, msg, session):
 
     except ValueError:
         whatsapp.send_message(
-            f"❌ *Invalid Selection*\nPlease choose a number from the list:\n\n" +
+            "❌ *Invalid Selection*\n"
+            "Please choose a number from the list:\n\n" +
             "\n".join(menu) +
             "\n\n_Type *cancel* to exit_",
             phone
