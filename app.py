@@ -263,22 +263,15 @@ def ask_for_payment_method(phone):
         "💳 *Select Payment Method:*\n"
         "1. EcoCash\n"
         "2. OneMoney\n"
-        "3. ZIPIT\n"
-        "4. USD Transfer\n\n"
+        "3. TeleCash\n"
+        "4. Cash\n\n"
         "_Reply with the number corresponding to your preferred method_",
         phone
     )
 
 def handle_payment_method_step(phone, msg, session):
-    payment_methods = {
-        "1": "EcoCash",
-        "2": "OneMoney",
-        "3": "ZIPIT",
-        "4": "USD Transfer"
-    }
-
-    method = payment_methods.get(msg.strip())
-    if not method:
+    
+    if msg > "4" or msg < "1":
         whatsapp.send_message(
             "❌ Invalid selection.\n\nPlease reply with a number:\n"
             "1. EcoCash\n2. OneMoney\n3. ZIPIT\n4. USD Transfer",
@@ -289,7 +282,7 @@ def handle_payment_method_step(phone, msg, session):
     session["data"]["payment_method"] = method
 
 
-    if method in ["EcoCash", "OneMoney"]:
+    if msg == ["1", "2", "3"]:
         session["step"] = "payment_number"
         ask_for_payment_number(phone)
         return "ok"
@@ -307,6 +300,15 @@ def handle_payment_method_step(phone, msg, session):
     d = session["data"]
     payment = paynow.create_payment(d.get("name", "Donor"), d.get("email", "donor@example.com"))
     payment.add(d.get("purpose", "Church Donation"), float(d.get("amount", 0)))
+
+    if msg == "1":
+        method = "EcoCash"
+    elif msg == "2":
+        method = "OneMoney"
+    elif msg == "3":
+        method = "TeleCash"
+    elif msg == "4":
+        method = "Cash"
 
     try:
         method_string = method.lower().replace(" ", "")
