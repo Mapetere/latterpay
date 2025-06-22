@@ -170,19 +170,19 @@ def webhook_debug():
                     msg_from = msg_data.get("from")
 
                     if is_echo_message(msg_id):
-                        logger.info("🔁 Echo message detected. Ignored.")
+                        logger.info(" Echo message detected. Ignored.")
                         save_sent_message_id(msg_id)
                         return "ok"
 
                     if msg_data.get("echo"):
-                        logger.info("🔁 Echo=True detected. Ignored.")
+                        logger.info(" Echo=True detected. Ignored.")
                         return "ok"
 
                     if msg_from in [os.getenv("PHONE_NUMBER_ID"), os.getenv("WHATSAPP_BOT_NUMBER")]:
-                        logger.info("🔁 Message from self. Ignored.")
+                        logger.info(" Message from self. Ignored.")
                         return "ok"
 
-                    logger.info("✅ Valid message received: " + msg_data.get("text", {}).get("body", ""))
+                    logger.info("Valid message received: " + msg_data.get("text", {}).get("body", ""))
 
                     save_sent_message_id(msg_id)
 
