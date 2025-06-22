@@ -260,7 +260,7 @@ def webhook_debug():
 
 def ask_for_payment_method(phone):
     whatsapp.send_message(
-        "💳 *Select Payment Method:*\n"
+        " *Select Payment Method:*\n"
         "1. EcoCash\n"
         "2. OneMoney\n"
         "3. TeleCash\n"
@@ -278,6 +278,8 @@ def handle_payment_method_step(phone, msg, session):
             phone
         )
         return "ok"
+    
+
 
     session["data"]["payment_method"] = method
 
@@ -330,10 +332,9 @@ def handle_payment_method_step(phone, msg, session):
     else:
         whatsapp.send_message("❌ Failed to generate payment request. Please try again.", phone)
 
-
-    
-
     return "ok"
+
+
 
 def handle_payment_number_step(phone, msg, session):
     raw = msg.strip()

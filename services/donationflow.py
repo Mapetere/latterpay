@@ -31,7 +31,7 @@ def handle_user_message(phone, msg, session):
     return handler(phone, msg, session)
 
 def handle_unknown_state(phone, msg, session):
-    whatsapp.send_message("⚠️ Hmm... I got lost. Let me reset your donation flow from the last known point.", phone)
+    whatsapp.send_message("Hmm... I got lost. Let me reset your donation flow from the last known point.", phone)
     
     # I want it to recover gracefully
     fallback_step = session.get("step", "name")
@@ -44,7 +44,7 @@ def handle_unknown_state(phone, msg, session):
 
 def ask_for_payment_method(phone):
     whatsapp.send_message(
-        "💳 *Select Payment Method:*\n"
+        "*Select Payment Method:*\n"
         "1. EcoCash\n"
         "2. OneMoney\n"
         "3. ZIPIT\n"
@@ -61,7 +61,7 @@ def handle_edit_command(phone, session):
 
     current_value = session["data"][session["current_edit"]]
     whatsapp.send_message(
-        f"✏️ Let's update your details.\n\n"
+        f" Let's update your details.\n\n"
         f"Current *{session['current_edit']}*: {current_value}\n"
         f"Send the new value or type *skip* to keep it.",
         phone
