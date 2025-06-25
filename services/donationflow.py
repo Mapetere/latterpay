@@ -97,6 +97,7 @@ def handle_payment_method_step(phone, msg, session):
     return "payment_number"
 
 
+
 def handle_payment_number_step(phone, msg, session):
     raw = msg.strip()
     if raw.startswith("0"):
@@ -154,8 +155,7 @@ def handle_payment_number_step(phone, msg, session):
             "Please check your number and try again or contact support.",
             phone
         )
-    # Log the session data for debugging
-    logger.debug(f"Session data after payment request: {json.dumps(session, indent=2)}")
+    logger.debug(f"Session data after payment request: {json.dumps(session, indent=2, default=str)}")
 
     if session:
         session["step"] = "awaiting_payment" 
