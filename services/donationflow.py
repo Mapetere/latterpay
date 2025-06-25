@@ -107,7 +107,7 @@ def handle_payment_number_step(phone, msg, session):
     )
 
     # Prepare payment
-    payment = paynow.create_payment("Donation", "finance@latterrain.org")  # or user email if available
+    payment = paynow.create_payment("Donation", "mapeterenyasha@gmail.com")
     amount = session["data"]["amount"]
     donation_desc = session["data"]["donation_type"]
 
