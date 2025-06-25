@@ -97,7 +97,6 @@ def handle_payment_method_step(phone, msg, session):
     return "payment_number"
 
 
-
 def handle_payment_number_step(phone, msg, session):
     raw = msg.strip()
     if raw.startswith("0"):
@@ -110,48 +109,55 @@ def handle_payment_number_step(phone, msg, session):
 
     session["data"]["phone"] = formatted
 
-    
+    # Ensure amount is a float
+    try:
+        amount = float(session["data"]["amount"])
+    except (ValueError, TypeError):
+        whatsapp.send_message("❌ Invalid amount format. Please enter a number like 5000.", phone)
+        return "ok"
+
+    method = session["data"]["payment_method"].lower()
+    valid_methods = ["ecocash", "onemoney", "zipit", "usd"]
+    if method not in valid_methods:
+        whatsapp.send_message("❌ Unsupported payment method.", phone)
+        return "ok"
+
     paynow = Paynow(
         "21116",
         "f6cb151e-10df-45cf-a504-d5dff25249cb",
         "https://latterpay-production.up.railway.app/payment-return",
         "https://latterpay-production.up.railway.app/payment-result"
-
     )
 
-   
-    payment = paynow.create_payment("payment", "mapeterenyasha@gmail.com")
-    amount = session["data"]["amount"]
     donation_desc = session["data"]["donation_type"]
-
+    payment = paynow.create_payment("Donation", "mapeterenyasha@gmail.com")
     payment.add(donation_desc, amount)
 
-    method = session["data"]["payment_method"].lower()
-    number = formatted
+    try:
+        response = paynow.send_mobile(payment, formatted, method)
+    except Exception as e:
+        logger.warning(f"Paynow SendMobile Exception: {type(e)} - {e}")
+        whatsapp.send_message("❌ Failed to send payment request. Please try again later.", phone)
+        return "ok"
 
-    response = paynow.send_mobile(payment, number, method)
-
-    if response.success:
+    if hasattr(response, "success") and response.success:
         session["poll_url"] = response.poll_url
         session["step"] = "awaiting_payment"
         whatsapp.send_message(
-        "✅ Number received!\n"
-        "📨 Payment request sent to your phone.\n"
-        "Once you've authorized it, type *check* to confirm payment.",
-        phone
-    )
-   
+            "✅ Payment request sent!\n"
+            "Approve it on your phone and type *check* to confirm.",
+            phone
+        )
     else:
-        logger.warning(f"Paynow SendMobile Failed: {response.error}")
+        logger.warning(f"Paynow SendMobile Failed: {getattr(response, 'error', str(response))}")
         whatsapp.send_message(
             "❌ Failed to send payment request.\n"
             "Please check your number and try again or contact support.",
             phone
         )
-    
-    session["step"] = "awaiting_payment"
 
     return "awaiting_payment"
+
 
 
 
@@ -167,8 +173,8 @@ def handle_awaiting_payment_step(phone, msg, session):
 
     poll_url = session.get("poll_url")
     if not poll_url:
-        whatsapp.send_message("⚠️ No payment in progress. Type *confirm* to start again.", phone)
-        return "ok"
+        whatsapp.send_message("⚠️ No payment in progress.", phone)
+        return "cancel_session"
 
     paynow = Paynow(
         integration_id=os.getenv("PAYNOW_ZWG_ID"),
