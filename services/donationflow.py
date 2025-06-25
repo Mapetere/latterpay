@@ -98,7 +98,7 @@ def handle_payment_number_step(phone, msg, session):
     session["data"]["phone"] = formatted
     session["step"] = "awaiting_payment"
     whatsapp.send_message("✅ Number received! Type *done* when payment is complete.", phone)
-    return "ok"
+    return "awaiting_payment"
 
 
 
