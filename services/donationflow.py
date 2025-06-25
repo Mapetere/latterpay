@@ -97,7 +97,8 @@ def handle_payment_number_step(phone, msg, session):
 
     session["data"]["phone"] = formatted
     session["step"] = "awaiting_payment"
-    whatsapp.send_message("✅ Number received! Type *done* when payment is complete.", phone)
+    whatsapp.send_message("✅ Number received!\n Type *status* to check your payment status.", phone)
+
     return "awaiting_payment"
 
 
@@ -111,13 +112,17 @@ def handle_awaiting_payment_step(phone, msg, session):
     if not poll_url:
         whatsapp.send_message("⚠️ No payment in progress. Please restart the process.", phone)
         return "ok"
+   
+
 
     paynow = Paynow(
-        integration_id=os.getenv("PAYNOW_ID"),
-        integration_key=os.getenv("PAYNOW_KEY"),
+        integration_id=os.getenv("PAYNOW_ZWG_ID"),
+        integration_key=os.getenv("PAYNOW_ZWG_KEY"),
         return_url=os.getenv("PAYNOW_RETURN_URL"),
         result_url=os.getenv("PAYNOW_RESULT_URL")
     )
+
+    
 
     status = paynow.poll_transaction(poll_url)
 
