@@ -144,7 +144,9 @@ def handle_payment_number_step(phone, msg, session):
     )
 
     donation_desc = session["data"]["donation_type"]
-    payment = paynow.create_payment("Donation", "mapeterenyasha@gmail.com")
+
+    payment = paynow.create_payment("Order", "mapeterenyasha@gmail.com")
+
     payment.add(donation_desc, amount)
 
     try:
