@@ -142,7 +142,7 @@ def handle_payment_number_step(phone, msg, session):
     )
    
     else:
-        logger.warning(f"Paynow SendMobile Failed: {response.errors}")
+        logger.warning(f"Paynow SendMobile Failed: {response.error}")
         whatsapp.send_message(
             "❌ Failed to send payment request.\n"
             "Please check your number and try again or contact support.",
