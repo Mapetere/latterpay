@@ -14,15 +14,10 @@ from services.getdonationmenu import get_donation_menu, validate_donation_choice
 import sys
 import logging
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('app.log')
-    ]
-)
+import logging
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
 
 sessions = config.sessions
 
@@ -154,10 +149,17 @@ def handle_payment_number_step(phone, msg, session):
 
 
         response = paynow.send_mobile(payment, formatted, method)
+
+        logger.debug(f"Raw Paynow response: {response}")
+        logger.debug(f"Response type: {type(response)}")
+        if hasattr(response, "poll_url"):
+            logger.debug(f"Poll URL: {response.poll_url}")
+
     except Exception as e:
         logger.warning(f"Paynow SendMobile Exception: {type(e)} - {e}")
         whatsapp.send_message("❌ Failed to send payment request. Please try again later.", phone)
         return "ok"
+
 
     if hasattr(response, "success") and response.success:
         session["poll_url"] = response.poll_url
