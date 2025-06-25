@@ -181,11 +181,11 @@ def handle_awaiting_payment_step(phone, msg, session):
         return "cancel_session"
 
     paynow = Paynow(
-        integration_id=os.getenv("PAYNOW_ZWG_ID"),
-        integration_key=os.getenv("PAYNOW_ZWG_KEY"),
-        return_url=os.getenv("PAYNOW_RETURN_URL"),
-        result_url=os.getenv("PAYNOW_RESULT_URL")
-    )
+            "21116",
+            "f6cb151e-10df-45cf-a504-d5dff25249cb",
+            "https://latterpay-production.up.railway.app/payment-return",
+            "https://latterpay-production.up.railway.app/payment-result"
+        )
 
     def poll_once(paynow, poll_url):
         status = paynow.check_transaction_status(poll_url)
