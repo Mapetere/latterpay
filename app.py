@@ -26,7 +26,12 @@ from services.donationflow import (
     handle_confirmation_step,
     handle_editing_fields,
     handle_edit_command,
-    handle_user_message                   
+    handle_user_message,
+    handle_payment_method_step,
+    handle_payment_number_step,
+    handle_awaiting_payment_step,
+    ask_for_payment_method
+
                     
 )
 from services.adminservice import AdminService
@@ -263,35 +268,6 @@ def webhook_debug():
 
 
 
-
-def handle_awaiting_payment_step(phone, msg, session):
-    if msg.strip().lower() != "done":
-        whatsapp.send_message("⌛ Waiting for payment confirmation. Type *done* once you've paid.", phone)
-        return "ok"
-
-    poll_url = session.get("poll_url")
-    if not poll_url:
-        whatsapp.send_message("⚠️ No payment in progress. Please restart the process.", phone)
-        return "ok"
-
-    paynow = Paynow(
-        integration_id=os.getenv("PAYNOW_ID"),
-        integration_key=os.getenv("PAYNOW_KEY"),
-        return_url=os.getenv("PAYNOW_RETURN_URL"),
-        result_url=os.getenv("PAYNOW_RESULT_URL")
-    )
-
-    status = paynow.poll_transaction(poll_url)
-
-    if status.paid:
-        record_payment(session["data"])
-        send_payment_report_to_finance()
-        whatsapp.send_message("✅ Payment confirmed! Your donation has been recorded. Thank you!", phone)
-        del sessions[phone]
-    else:
-        whatsapp.send_message("❌ Payment not confirmed yet. Please wait a moment and try again.", phone)
-
-    return "ok"
 
 
 if __name__ == "__main__":

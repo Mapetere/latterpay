@@ -1,6 +1,11 @@
 # services/donation_flow.py
 from datetime import datetime
 import json
+from paynow import Paynow
+import os
+from services.recordpaymentdata import record_payment
+from services.setup import send_payment_report_to_finance
+from services.sessions import check_session_timeout, cancel_session, initialize_session
 from services import config
 from services.config import CUSTOM_TYPES_FILE, donation_types as DONATION_TYPES
 from services.pygwan_whatsapp import whatsapp
@@ -134,6 +139,35 @@ def handle_edit_command(phone, session):
 
     return "editing_fields"
 
+
+def handle_awaiting_payment_step(phone, msg, session):
+    if msg.strip().lower() != "done":
+        whatsapp.send_message("⌛ Waiting for payment confirmation. Type *done* once you've paid.", phone)
+        return "ok"
+
+    poll_url = session.get("poll_url")
+    if not poll_url:
+        whatsapp.send_message("⚠️ No payment in progress. Please restart the process.", phone)
+        return "ok"
+
+    paynow = Paynow(
+        integration_id=os.getenv("PAYNOW_ID"),
+        integration_key=os.getenv("PAYNOW_KEY"),
+        return_url=os.getenv("PAYNOW_RETURN_URL"),
+        result_url=os.getenv("PAYNOW_RESULT_URL")
+    )
+
+    status = paynow.poll_transaction(poll_url)
+
+    if status.paid:
+        record_payment(session["data"])
+        send_payment_report_to_finance()
+        whatsapp.send_message("✅ Payment confirmed! Your donation has been recorded. Thank you!", phone)
+        del sessions[phone]
+    else:
+        whatsapp.send_message("❌ Payment not confirmed yet. Please wait a moment and try again.", phone)
+
+    return "ok"
 
 def handle_editing_fields(phone, msg, session):
     field = session.get("current_edit")
