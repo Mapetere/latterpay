@@ -118,6 +118,15 @@ def handle_payment_number_step(phone, msg, session):
 
     method = session["data"]["payment_method"].lower()
     valid_methods = ["ecocash", "onemoney", "zipit", "usd"]
+    if method == "ecocash":
+        method = "ecocash"
+    elif method == "onemoney":
+        method = "onemoney"
+    elif method == "zipit":
+        method = "zipit"
+    elif method == "usd transfer":
+        method = "usd"
+
     if method not in valid_methods:
         whatsapp.send_message("❌ Unsupported payment method.", phone)
         return "ok"
@@ -134,6 +143,9 @@ def handle_payment_number_step(phone, msg, session):
     payment.add(donation_desc, amount)
 
     try:
+        logger.debug(f"Using Paynow method: '{method}'")
+        
+
         response = paynow.send_mobile(payment, formatted, method)
     except Exception as e:
         logger.warning(f"Paynow SendMobile Exception: {type(e)} - {e}")
@@ -179,6 +191,7 @@ def handle_awaiting_payment_step(phone, msg, session):
     if not poll_url:
         whatsapp.send_message("⚠️ No payment in progress.", phone)
         return "cancel_session"
+    
 
     paynow = Paynow(
             "21116",
@@ -186,12 +199,18 @@ def handle_awaiting_payment_step(phone, msg, session):
             "https://latterpay-production.up.railway.app/payment-return",
             "https://latterpay-production.up.railway.app/payment-result"
         )
+    
+
 
     def poll_once(paynow, poll_url):
         status = paynow.check_transaction_status(poll_url)
         return status.status
 
     result = poll_once(paynow, poll_url)
+
+
+
+
 
     if result == "paid":
         record_payment(session["data"])
