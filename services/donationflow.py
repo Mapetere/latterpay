@@ -109,7 +109,6 @@ def handle_payment_number_step(phone, msg, session):
 
     session["data"]["phone"] = formatted
 
-    # Ensure amount is a float
     try:
         amount = float(session["data"]["amount"])
     except (ValueError, TypeError):
@@ -155,8 +154,13 @@ def handle_payment_number_step(phone, msg, session):
             "Please check your number and try again or contact support.",
             phone
         )
+    # Log the session data for debugging
+    logger.debug(f"Session data after payment request: {json.dumps(session, indent=2)}")
 
-    return "awaiting_payment"
+    if session:
+        session["step"] = "awaiting_payment" 
+
+    return "ok"
 
 
 
