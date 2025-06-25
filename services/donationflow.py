@@ -29,7 +29,7 @@ def handle_unknown_state(phone, msg, session):
     session["step"] = "name"
     return handle_name_step(phone, msg, session)
 
-def ask_for_payment_method(phone):
+def ask_for_payment_method(phone,msg=None,session=None):
     whatsapp.send_message(
         "*Select Payment Method:*\n"
         "1. EcoCash\n"
@@ -157,7 +157,7 @@ def handle_confirmation_step(phone, msg, session):
     msg = msg.strip().lower()
     if msg == "confirm":
         session["step"] = "awaiting_user_method"
-        return ask_for_payment_method(phone)
+        return ask_for_payment_method(phone,msg,session)
     elif msg == "edit":
         return handle_edit_command(phone, session)
     elif msg == "cancel":
@@ -193,6 +193,7 @@ def handle_amount_step(phone, msg, session):
         whatsapp.send_message("❗ Invalid amount. Please enter a number (e.g. 5000).", phone)
     return "ok"
 
+
 def handle_donation_type_step(phone, msg, session):
     max_options = len(get_donation_menu())
     is_valid, response = validate_donation_choice(msg, max_options)
@@ -207,11 +208,13 @@ def handle_donation_type_step(phone, msg, session):
     whatsapp.send_message("🌍 Enter your congregation name:", phone)
     return "ok"
 
+
 def handle_region_step(phone, msg, session):
     session["data"]["region"] = msg
     session["step"] = "note"
-    whatsapp.send_message("📝 Any additional notes for finance?", phone)
+    whatsapp.send_message("📝 Any additional notes to clarify your payment purpose?", phone)
     return "ok"
+
 
 def handle_note_step(phone, msg, session):
     session["data"]["note"] = msg.strip()
