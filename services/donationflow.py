@@ -23,11 +23,15 @@ def handle_user_message(phone, msg, session):
         return handler(phone, msg, session)
     else:
         return handle_unknown_state(phone, msg, session)
+    
+
 
 def handle_unknown_state(phone, msg, session):
     whatsapp.send_message("Hmm... I got lost. Let me reset your donation flow from the last known point.", phone)
     session["step"] = "name"
     return handle_name_step(phone, msg, session)
+
+
 
 def ask_for_payment_method(phone,msg=None,session=None):
     whatsapp.send_message(
@@ -39,7 +43,13 @@ def ask_for_payment_method(phone,msg=None,session=None):
         "_Reply with the number corresponding to your preferred method_",
         phone
     )
-    return "awaiting_payment_method"
+
+    if session:
+        session["step"] = "payment_method" 
+
+    return "payment_method"
+
+
 
 def handle_payment_method_step(phone, msg, session):
     msg = msg.strip()
@@ -61,7 +71,8 @@ def handle_payment_method_step(phone, msg, session):
             "_Choose your preferred method_",
             phone
         )
-        return "awaiting_payment_method"
+        return "payment_method"
+    
 
     session["data"]["payment_method"] = selected_method
     session["step"] = "payment_number"
@@ -72,6 +83,7 @@ def handle_payment_method_step(phone, msg, session):
         phone
     )
     return "ok"
+
 
 def handle_payment_number_step(phone, msg, session):
     raw = msg.strip()
@@ -87,6 +99,8 @@ def handle_payment_number_step(phone, msg, session):
     session["step"] = "awaiting_payment"
     whatsapp.send_message("✅ Number received! Type *done* when payment is complete.", phone)
     return "ok"
+
+
 
 def handle_awaiting_payment_step(phone, msg, session):
     if msg.strip().lower() != "done":
@@ -128,6 +142,8 @@ def handle_edit_command(phone, session):
     )
     return "editing_fields"
 
+
+
 def handle_editing_fields(phone, msg, session):
     field = session.get("current_edit")
     if not field:
@@ -141,6 +157,8 @@ def handle_editing_fields(phone, msg, session):
             f"Current *{session['current_edit']}*: {current_value}\nSend new value or *skip*.", phone
         )
         return "editing_fields"
+    
+
     session.pop("current_edit", None)
     session.pop("edit_queue", None)
     session["step"] = "awaiting_confirmation"
@@ -152,6 +170,9 @@ def handle_editing_fields(phone, msg, session):
         phone
     )
     return "ok"
+
+
+
 
 def handle_confirmation_step(phone, msg, session):
     msg = msg.strip().lower()
