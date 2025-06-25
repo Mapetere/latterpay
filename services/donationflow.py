@@ -39,7 +39,6 @@ def handle_unknown_state(phone, msg, session):
     return handle_name_step(phone, msg, session)
 
 
-
 def ask_for_payment_method(phone,msg=None,session=None):
     whatsapp.send_message(
         "*Select Payment Method:*\n"
