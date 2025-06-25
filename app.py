@@ -86,7 +86,7 @@ def payment_return():
 def payment_result():
     try:
         raw_data = request.data.decode("utf-8")
-        logger.info("📩 Paynow Result Received: \n" + raw_data)
+        logger.info("Paynow Result Received: \n" + raw_data)
         return "OK"
     except Exception as e:
         logger.error(f"❌ Error handling Paynow result: {e}")
