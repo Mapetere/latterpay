@@ -2,6 +2,7 @@
 from datetime import datetime
 import json
 import os
+import time  
 from paynow import Paynow
 from services.recordpaymentdata import record_payment
 from services.setup import send_payment_report_to_finance
@@ -96,24 +97,64 @@ def handle_payment_number_step(phone, msg, session):
         return "ok"
 
     session["data"]["phone"] = formatted
+
+    # Setup Paynow client
+    paynow = Paynow(
+        integration_id=os.getenv("PAYNOW_ZWG_ID"),
+        integration_key=os.getenv("PAYNOW_ZWG_KEY"),
+        return_url=os.getenv("PAYNOW_RETURN_URL"),
+        result_url=os.getenv("PAYNOW_RESULT_URL")
+    )
+
+    # Prepare payment
+    payment = paynow.create_payment("Donation", "finance@latterrain.org")  # or user email if available
+    amount = session["data"]["amount"]
+    donation_desc = session["data"]["donation_type"]
+
+    payment.add(donation_desc, amount)
+
+    method = session["data"]["payment_method"].lower()
+    number = formatted
+
+    response = paynow.send_mobile(payment, number, method)
+
+    if response.success:
+        session["poll_url"] = response.poll_url
+        session["step"] = "awaiting_payment"
+        whatsapp.send_message(
+        "✅ Number received!\n"
+        "📨 Payment request sent to your phone.\n"
+        "Once you've authorized it, type *check* to confirm payment.",
+        phone
+    )
+   
+    else:
+        whatsapp.send_message(
+            "❌ Failed to send payment request.\n"
+            "Please check your number and try again or contact support.",
+            phone
+        )
+    
     session["step"] = "awaiting_payment"
-    whatsapp.send_message("✅ Number received!\n Type *status* to check your payment status.", phone)
 
     return "awaiting_payment"
 
 
 
+
 def handle_awaiting_payment_step(phone, msg, session):
-    if msg.strip().lower() != "done":
-        whatsapp.send_message("⌛ Waiting for payment confirmation. Type *done* once you've paid.", phone)
+    if msg.strip().lower() != "check":
+        whatsapp.send_message(
+            "Type *check* to see if your payment was confirmed.\n"
+            "If you haven’t authorized the payment yet, please do so on your phone.",
+            phone
+        )
         return "ok"
 
     poll_url = session.get("poll_url")
     if not poll_url:
-        whatsapp.send_message("⚠️ No payment in progress. Please restart the process.", phone)
+        whatsapp.send_message("⚠️ No payment in progress. Type *confirm* to start again.", phone)
         return "ok"
-   
-
 
     paynow = Paynow(
         integration_id=os.getenv("PAYNOW_ZWG_ID"),
@@ -122,19 +163,28 @@ def handle_awaiting_payment_step(phone, msg, session):
         result_url=os.getenv("PAYNOW_RESULT_URL")
     )
 
-    
+    def poll_once(paynow, poll_url):
+        status = paynow.check_transaction_status(poll_url)
+        return status.status
 
-    status = paynow.poll_transaction(poll_url)
+    result = poll_once(paynow, poll_url)
 
-    if status.paid:
+    if result == "paid":
         record_payment(session["data"])
         send_payment_report_to_finance()
-        whatsapp.send_message("✅ Payment confirmed! Thank you!", phone)
+        whatsapp.send_message("✅ Payment confirmed! Your donation has been recorded. Thank you 🙏", phone)
         del sessions[phone]
+    elif result == "cancelled":
+        whatsapp.send_message("⚠️ Payment was cancelled. Type *confirm* to try again.", phone)
+        session["step"] = "awaiting_confirmation"
+    elif result == "failed":
+        whatsapp.send_message("❌ Payment failed. Please try again or use a different method.", phone)
+        session["step"] = "awaiting_confirmation"
     else:
-        whatsapp.send_message("❌ Payment not confirmed yet. Please wait and try again.", phone)
+        whatsapp.send_message("⏳ Payment still processing. Please wait a minute and type *check* again.", phone)
 
     return "ok"
+
 
 def handle_edit_command(phone, session):
     session["step"] = "editing_fields"
