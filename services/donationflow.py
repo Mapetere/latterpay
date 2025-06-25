@@ -83,7 +83,8 @@ def handle_payment_method_step(phone, msg, session):
         "_Type *cancel* to exit_",
         phone
     )
-    return "ok"
+    return "payment_number"
+
 
 
 def handle_payment_number_step(phone, msg, session):
