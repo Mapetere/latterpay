@@ -258,76 +258,9 @@ def webhook_debug():
 
 
 
-def ask_for_payment_method(phone):
-    whatsapp.send_message(
-        " *Select Payment Method:*\n"
-        "1. EcoCash\n"
-        "2. OneMoney\n"
-        "3. TeleCash\n"
-        "4. Cash\n\n"
-        "_Reply with the number corresponding to your preferred method_",
-        phone
-    )
-    return "payment_method"
 
 
 
-
-def handle_payment_method_step(phone, msg, session):
-    msg = msg.strip()
-
-    payment_options = {
-        "1": "EcoCash",
-        "2": "OneMoney",
-        "3": "ZIPIT",
-        "4": "USD Transfer"
-    }
-
-    selected_method = payment_options.get(msg)
-
-    if not selected_method:
-        whatsapp.send_message(
-            "❌ *Invalid Payment Method*\n"
-            "Please reply with a number from the list:\n\n"
-            "*1.* EcoCash\n"
-            "*2.* OneMoney\n"
-            "*3.* ZIPIT\n"
-            "*4.* USD Transfer\n\n"
-            "_Choose your preferred method_",
-            phone
-        )
-        return "awaiting_payment_method"
-
-    # Save method and update state
-    session["data"]["payment_method"] = selected_method
-    session["state"] = "awaiting_payment_number"
-
-    whatsapp.send_message(
-        f"✅ *{selected_method} selected!*\n\n"
-        f"Please enter the payment *number* or *account* to send to.\n"
-        "For example, if it's EcoCash, enter the EcoCash number you want us to send the request to.\n\n"
-        "_Type *cancel* to exit_",
-        phone
-    )
-
-    return "payment_number"
-
-
-
-def handle_payment_number_step(phone, msg, session):
-    raw = msg.strip()
-    if raw.startswith("0"):
-        formatted = "263" + raw[1:]
-    elif raw.startswith("263"):
-        formatted = raw
-    else:
-        whatsapp.send_message("❌ Invalid number format. Please enter a number like *0771234567* or *263771234567*", phone)
-        return "ok"
-
-    session["data"]["phone"] = formatted
-    session["step"] = "awaiting_payment"
-
-    return handle_payment_method_step(phone, "proceed", session)  # or trigger payment directly here
 
 
 
