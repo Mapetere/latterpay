@@ -30,6 +30,8 @@ def handle_user_message(phone, msg, session):
     handler = state_handlers.get(state, handle_unknown_state)
     return handler(phone, msg, session)
 
+
+
 def handle_unknown_state(phone, msg, session):
     whatsapp.send_message("Hmm... I got lost. Let me reset your donation flow from the last known point.", phone)
     
@@ -52,6 +54,8 @@ def ask_for_payment_method(phone):
         "_Reply with the number corresponding to your preferred method_",
         phone
     )
+
+    return handle_payment_method_step
 
 
 def handle_edit_command(phone, session):

@@ -268,71 +268,49 @@ def ask_for_payment_method(phone):
         "_Reply with the number corresponding to your preferred method_",
         phone
     )
+    return "payment_method"
+
+
+
 
 def handle_payment_method_step(phone, msg, session):
-    
-    if msg > "4" or msg < "1":
+    msg = msg.strip()
+
+    payment_options = {
+        "1": "EcoCash",
+        "2": "OneMoney",
+        "3": "ZIPIT",
+        "4": "USD Transfer"
+    }
+
+    selected_method = payment_options.get(msg)
+
+    if not selected_method:
         whatsapp.send_message(
-            "❌ Invalid selection.\n\nPlease reply with a number:\n"
-            "1. EcoCash\n2. OneMoney\n3. ZIPIT\n4. USD Transfer",
+            "❌ *Invalid Payment Method*\n"
+            "Please reply with a number from the list:\n\n"
+            "*1.* EcoCash\n"
+            "*2.* OneMoney\n"
+            "*3.* ZIPIT\n"
+            "*4.* USD Transfer\n\n"
+            "_Choose your preferred method_",
             phone
         )
-        return "ok"
-    
+        return "awaiting_payment_method"
 
+    # Save method and update state
+    session["data"]["payment_method"] = selected_method
+    session["state"] = "awaiting_payment_number"
 
-    session["data"]["payment_method"] = method
-
-
-    if msg == ["1", "2", "3"]:
-        session["step"] = "payment_number"
-        ask_for_payment_number(phone)
-        return "ok"
-    
-    session["step"] = "awaiting_payment"
-
-
-    paynow = Paynow(
-        integration_id=os.getenv("PAYNOW_ID"),
-        integration_key=os.getenv("PAYNOW_KEY"),
-        return_url=os.getenv("PAYNOW_RETURN_URL"),
-        result_url=os.getenv("PAYNOW_RESULT_URL")
+    whatsapp.send_message(
+        f"✅ *{selected_method} selected!*\n\n"
+        f"Please enter the payment *number* or *account* to send to.\n"
+        "For example, if it's EcoCash, enter the EcoCash number you want us to send the request to.\n\n"
+        "_Type *cancel* to exit_",
+        phone
     )
 
-    d = session["data"]
-    payment = paynow.create_payment(d.get("name", "Donor"), d.get("email", "donor@example.com"))
-    payment.add(d.get("purpose", "Church Donation"), float(d.get("amount", 0)))
-
-    if msg == "1":
-        method = "EcoCash"
-    elif msg == "2":
-        method = "OneMoney"
-    elif msg == "3":
-        method = "TeleCash"
-    elif msg == "4":
-        method = "Cash"
-
-    try:
-        method_string = method.lower().replace(" ", "")
-        response = paynow.send_mobile(payment, d.get("phone", phone),method_string)
-    except Exception as paynow_error:
-        logger.error(f"Paynow mobile payment error: {paynow_error}")
-        whatsapp.send_message("⚠️ An error occurred while trying to initiate the payment. Please try again later.", phone)
-        return "ok"
-
-    if response.success:
-        session["poll_url"] = response.poll_url
-        whatsapp.send_message(
-            f"💳 Please complete your {method} payment using the link below:\n\n"
-            f"{response.redirect_url}\n\n"
-            "✅ I will monitor your payment for 10 minutes and confirm automatically.\n"
-            "_Type *done* when finished if you'd like to speed things up._",
-            phone
-        )
-    else:
-        whatsapp.send_message("❌ Failed to generate payment request. Please try again.", phone)
-
-    return "ok"
+    return "payment_number"
 
 
 
@@ -350,6 +328,7 @@ def handle_payment_number_step(phone, msg, session):
     session["step"] = "awaiting_payment"
 
     return handle_payment_method_step(phone, "proceed", session)  # or trigger payment directly here
+
 
 
 def handle_awaiting_payment_step(phone, msg, session):
