@@ -15,7 +15,7 @@ from services.sessions import check_session_timeout, cancel_session, initialize_
 from services.donationflow import handle_user_message
 from services.adminservice import AdminService
 
-# Setup logging
+
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -26,10 +26,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables
+
 load_dotenv()
 
-# Ensure required files exist
+
 for file_path in [CUSTOM_TYPES_FILE, PAYMENTS_FILE]:
     if not os.path.exists(file_path):
         with open(file_path, 'w') as f:
@@ -37,7 +37,6 @@ for file_path in [CUSTOM_TYPES_FILE, PAYMENTS_FILE]:
 
 latterpay = Flask(__name__)
 
-# Initialize SQLite DB
 def init_db():
     conn = sqlite3.connect("botdata.db", timeout=10)
     cursor = conn.cursor()
@@ -50,7 +49,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Helper functions for echo message handling
 def is_echo_message(msg_id):
     conn = sqlite3.connect("botdata.db", timeout=10)
     cursor = conn.cursor()
@@ -109,7 +107,6 @@ def webhook_debug():
                 logger.error("No valid JSON data received.")
                 return jsonify({"status": "error", "message": "No data"}), 400
 
-            # Parse WhatsApp webhook
             entry = data.get("entry", [{}])[0]
             changes = entry.get("changes", [{}])[0]
             value = changes.get("value", {})
@@ -136,16 +133,13 @@ def webhook_debug():
 
             logger.info(f"Valid message received from {phone}: {msg}")
 
-            # Admin command check
             if phone == os.getenv("ADMIN_PHONE"):
                 return AdminService.handle_admin_command(phone, msg) or jsonify({"status": "processed"}), 200
 
-            # New session initialization
             if phone not in sessions:
                 initialize_session(phone, name)
                 return jsonify({"status": "session initialized"}), 200
 
-            # Session timeout check
             if check_session_timeout(phone):
                 return jsonify({"status": "session timeout"}), 200
 
@@ -156,7 +150,6 @@ def webhook_debug():
             sessions[phone]["last_active"] = datetime.now()
             session = sessions[phone]
 
-            # Unified state-machine handler from donationflow
             return handle_user_message(phone, msg, session)
 
     except Exception as e:

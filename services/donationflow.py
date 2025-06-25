@@ -11,10 +11,21 @@ from services import config
 from services.config import CUSTOM_TYPES_FILE, donation_types as DONATION_TYPES
 from services.pygwan_whatsapp import whatsapp
 from services.getdonationmenu import get_donation_menu, validate_donation_choice
+import sys
+import logging
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('app.log')
+    ]
+)
+logger = logging.getLogger(__name__)
 
 sessions = config.sessions
 
-# Step handler map (unified across app and donation_flow)
 step_handlers = {}
 
 def handle_user_message(phone, msg, session):
@@ -109,7 +120,7 @@ def handle_payment_number_step(phone, msg, session):
     )
 
    
-    payment = paynow.create_payment("Donation", "mapeterenyasha@gmail.com")
+    payment = paynow.create_payment("payment", "mapeterenyasha@gmail.com")
     amount = session["data"]["amount"]
     donation_desc = session["data"]["donation_type"]
 
@@ -131,6 +142,7 @@ def handle_payment_number_step(phone, msg, session):
     )
    
     else:
+        logger.warning(f"Paynow SendMobile Failed: {response.errors}")
         whatsapp.send_message(
             "❌ Failed to send payment request.\n"
             "Please check your number and try again or contact support.",
