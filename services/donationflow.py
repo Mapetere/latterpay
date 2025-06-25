@@ -100,13 +100,17 @@ def handle_payment_method_step(phone, msg, session):
 
 def handle_payment_number_step(phone, msg, session):
     raw = msg.strip()
-    if raw.startswith("0"):
+
+
+    if raw.startswith("0") and len(raw) == 10: 
         formatted = "263" + raw[1:]
-    elif raw.startswith("263"):
+    elif raw.startswith("263") and len(raw) == 12:
         formatted = raw
     else:
         whatsapp.send_message("❌ Invalid number format. Use *0771234567* or *263771234567*.", phone)
         return "ok"
+    
+    
 
     session["data"]["phone"] = formatted
 
@@ -115,6 +119,7 @@ def handle_payment_number_step(phone, msg, session):
     except (ValueError, TypeError):
         whatsapp.send_message("❌ Invalid amount format. Please enter a number like 5000.", phone)
         return "ok"
+
 
     method = session["data"]["payment_method"].lower()
     valid_methods = ["ecocash", "onemoney", "zipit", "usd"]
@@ -144,7 +149,7 @@ def handle_payment_number_step(phone, msg, session):
 
     try:
         logger.debug(f"Using Paynow method: '{method}'")
-        
+
 
         response = paynow.send_mobile(payment, formatted, method)
     except Exception as e:
