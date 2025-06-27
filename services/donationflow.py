@@ -179,17 +179,21 @@ def handle_payment_number_step(phone, msg, session):
             phone
         )
     else:
-        logger.warning(f"⚠️ Paynow send_mobile() failed. Error: {getattr(response, 'error', str(response))}")
-        whatsapp.send_message(
-            "❌ Failed to send payment request.\n"
-            "Please check your number and try again or contact support.",
-            phone
-        ) 
-        
-        if session:
-            session["step"] = "awaiting_payment" 
-
+        if isinstance(response, str):
+            logger.warning(f"⚠️ Paynow send_mobile() failed. Error string: {response}")
+        else:
+            logger.warning(f"⚠️ Paynow send_mobile() failed. Error: {getattr(response, 'error', 'Unknown error')}")
+            whatsapp.send_message(
+                "❌ Failed to send payment request.\n"
+                "Please check your number and try again or contact support.",
+                phone
+            ) 
         return "ok"
+    
+    if session:
+        session["step"] = "awaiting_payment" 
+
+    return "ok"
 
 
 
