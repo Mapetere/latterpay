@@ -160,6 +160,14 @@ def handle_payment_number_step(phone, msg, session):
         return "ok"
 
 
+    if isinstance(response, str):
+        logger.warning(f"⚠️ Paynow response was a string: {response}")
+        whatsapp.send_message(
+            "❌ Payment request failed (response format issue). Please try again.",
+            phone
+        )
+        return "ok"
+
     if hasattr(response, "success") and response.success:
         poll_url = response.poll_url
         logger.debug(f"✅ Payment Success. Poll URL: {poll_url}")
@@ -171,18 +179,17 @@ def handle_payment_number_step(phone, msg, session):
             phone
         )
     else:
-        logger.warning(f"Paynow SendMobile Failed: {getattr(response, 'error', str(response))}")
+        logger.warning(f"⚠️ Paynow send_mobile() failed. Error: {getattr(response, 'error', str(response))}")
         whatsapp.send_message(
             "❌ Failed to send payment request.\n"
             "Please check your number and try again or contact support.",
             phone
-        )
-    logger.debug(f"Session data after payment request: {json.dumps(session, indent=2, default=str)}")
+        ) 
+        
+        if session:
+            session["step"] = "awaiting_payment" 
 
-    if session:
-        session["step"] = "awaiting_payment" 
-
-    return "ok"
+        return "ok"
 
 
 
