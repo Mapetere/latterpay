@@ -161,13 +161,15 @@ def handle_payment_number_step(phone, msg, session):
 
 
     if hasattr(response, "success") and response.success:
-        session["poll_url"] = response.poll_url
-        session["step"] = "awaiting_payment"
-        whatsapp.send_message(
-            "✅ Payment request sent!\n"
-            "Approve it on your phone and type *check* to confirm.",
-            phone
-        )
+    poll_url = response.poll_url
+    logger.debug(f"✅ Payment Success. Poll URL: {poll_url}")
+    session["poll_url"] = poll_url
+    session["step"] = "awaiting_payment"
+    whatsapp.send_message(
+        "✅ Payment request sent!\n"
+        "Approve it on your phone and type *check* to confirm.",
+        phone
+    )
     else:
         logger.warning(f"Paynow SendMobile Failed: {getattr(response, 'error', str(response))}")
         whatsapp.send_message(
