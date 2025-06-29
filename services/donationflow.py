@@ -317,7 +317,7 @@ def handle_name_step(phone, msg, session):
         return "ok"
     session["data"]["name"] = msg
     session["step"] = "amount"
-    whatsapp.send_message("*Amount?* Enter amount (e.g. 5000). Type *cancel* to exit.", phone)
+    whatsapp.send_message("*Amount?* Enter amount (Maximum amount is 500)). Type *cancel* to exit.", phone)
     return "ok"
 
 def handle_amount_step(phone, msg, session):
@@ -330,7 +330,7 @@ def handle_amount_step(phone, msg, session):
             phone
         )
     except ValueError:
-        whatsapp.send_message("❗ Invalid amount. Please enter a number (e.g. 5000).", phone)
+        whatsapp.send_message("❗ Invalid amount. Please enter a number (e.g. 50).", phone)
     return "ok"
 
 
