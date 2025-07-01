@@ -39,9 +39,11 @@ def handle_user_message(phone, msg, session):
 
 
 def handle_unknown_state(phone, msg, session):
-    whatsapp.send_message("Hmm... I got lost. Let me reset your donation flow from the last known point.", phone)
-    session["step"] = "name"
+    whatsapp.send_message("Hmm... I got lost. I'm sorry you session will have to restart", phone)
+    if session:
+        cancel_session(phone)
     save_session(phone, session["step"], session["data"])
+    
     return handle_name_step(phone, msg, session)
 
 
@@ -175,41 +177,69 @@ def handle_payment_number_step(phone, msg, session):
     payment.add(donation_desc, amount)
 
     try:
-            logger.debug(f"Sending payment using Paynow method: '{paynow_method}'")
-            response = paynow.send_mobile(payment, formatted, paynow_method)
-            logger.debug(f" Paynow response: {response}")
+        logger.debug(f"Sending payment using Paynow method: '{paynow_method}'")
+        response = paynow.send_mobile(payment, formatted, paynow_method)
+        logger.debug(f" Paynow response: {response}")
 
-            if isinstance(response, str):
-                logger.warning(f"Unexpected string response: {response}")
-                whatsapp.send_message("❌ Payment request failed. Please try again.", phone)
-                return "ok"
+        if isinstance(response, str):
+            logger.warning(f"Unexpected string response: {response}")
+            whatsapp.send_message("❌ Payment request failed. Please try again.", phone)
+            return "ok"
 
-            if hasattr(response, "success") and response.success:
-                poll_url = response.poll_url 
-                session["poll_url"] = poll_url
-                session["step"] = "awaiting_payment"
-                save_session(phone, session["step"], session["data"])
-                
-                threading.Thread(target=poll_payment_status, args=(phone, poll_url, paynow)).start()
-                
-                whatsapp.send_message(
-                    "✅ Payment request sent!\n"
-                    "Approve the payment on your phone and type *check* to confirm.",
-                    phone
-                )
-            else:
-                error_msg = getattr(response, 'error', 'Unknown error')
-                logger.warning(f"❌ Paynow send_mobile failed: {error_msg}")
-                whatsapp.send_message(
-                    "❌ Failed to send payment request.\n"
-                    "Please check your number and try again or contact support.",
-                    phone
-                )
+        if hasattr(response, "success") and response.success:
+            poll_url = response.poll_url
+            session["poll_url"] = poll_url
+            
+            save_session(phone, session["step"], session["data"])
+            whatsapp.send_message(
+                "✅ Payment request sent!\n"
+                "Approve the payment on your phone and type *check* to confirm.",
+                phone
+            )
+            
+            threading.Thread(target=poll_payment_status, args=(phone, poll_url, paynow)).start()
+
+        else:
+            error_msg = getattr(response, 'error', 'Unknown error')
+            logger.warning(f"❌ Paynow send_mobile failed: {error_msg}")
+            whatsapp.send_message(
+                "❌ Failed to send payment request.\n"
+                "Please check your number and try again or contact support.",
+                phone
+            )
 
     except Exception as e:
         logger.exception(f"🔥 Exception during Paynow payment: {e}")
         whatsapp.send_message("❌ Payment error. Please try again later.", phone)
 
+    return "ok"
+
+
+
+
+
+def handle_awaiting_payment_step(phone, msg, session):
+    if msg.strip().lower() != "check":
+        whatsapp.send_message(
+            "Type *check* to see if your payment was confirmed.\n"
+            "If you haven’t authorized the payment yet, please do so on your phone.",
+            phone
+        )
+        return "ok"
+
+    poll_url = session.get("poll_url")
+    if not poll_url:
+        whatsapp.send_message("⚠️ No payment in progress.", phone)
+        return "cancel_session"
+    
+
+    paynow = Paynow(
+            "21116",
+            "f6cb151e-10df-45cf-a504-d5dff25249cb",
+            "https://latterpay-production.up.railway.app/payment-return",
+            "https://latterpay-production.up.railway.app/payment-result"
+        )
+    
 
 
 
@@ -434,5 +464,6 @@ step_handlers = {
     "awaiting_user_method": ask_for_payment_method,
     "payment_method": handle_payment_method_step,
     "payment_number": handle_payment_number_step,
+    "awaiting_payment": handle_awaiting_payment_step,
     "editing_fields": handle_editing_fields,
 }

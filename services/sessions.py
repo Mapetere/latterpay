@@ -15,7 +15,7 @@ import time
 
 from services.pygwan_whatsapp import whatsapp
 
-last_active = datetime.now().isoformat()
+last_active = datetime.now()
 
 
 
