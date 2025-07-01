@@ -46,8 +46,18 @@ def init_db():
             sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS known_users (
+            phone TEXT PRIMARY KEY,
+            first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
+
+
 
 def is_echo_message(msg_id):
     conn = sqlite3.connect("botdata.db", timeout=10)
@@ -139,6 +149,26 @@ def webhook_debug():
             if phone not in sessions:
                 initialize_session(phone, name)
                 return jsonify({"status": "session initialized"}), 200
+
+            if phone not in known_users:
+                whatsapp.send_message(
+                    "👋 Hello! I’m *LatterPay*, your trusted donation assistant.\n"
+                    "Let’s get started. Please enter the *full name* of the person making the payment.",
+                    phone
+                )
+            else:
+                whatsapp.send_message(
+                    "🔄 Welcome back to *LatterPay*!\n"
+                    "Back for another payment? Please enter the *name of the person* making this payment.",
+                    phone
+                )
+
+
+
+
+
+
+
 
             if check_session_timeout(phone):
                 return jsonify({"status": "session timeout"}), 200
