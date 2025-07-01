@@ -52,7 +52,7 @@ def monitor_sessions():
                     minutes_inactive = (now - last_active).total_seconds() / 60
 
                     # Warn at ~4m50s
-                    if 4.83 < minutes_inactive < 5:
+                    if 4 < minutes_inactive < 5:
                         whatsapp.send_message(
                             "⚠️ Just a heads-up — your session will expire in 10 seconds.\n"
                             "Reply with any message to keep me active",
