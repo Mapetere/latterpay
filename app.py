@@ -6,6 +6,7 @@ import sqlite3
 from sqlite3 import OperationalError
 from paynow import Paynow
 import sys
+import time
 import logging
 from dotenv import load_dotenv
 import threading
@@ -106,6 +107,23 @@ def delete_old_ids():
     conn.commit()
     conn.close()
 
+def message_exists(msg_id):
+    return is_echo_message(msg_id)
+
+
+def cleanup_message_ids():
+    def cleaner():
+        while True:
+            try:
+                delete_old_ids()
+                time.sleep(3600)  # every 10 minutes
+            except Exception as e:
+                logger.warning(f"[CLEANUP ERROR] {e}")
+                time.sleep(600)
+
+    threading.Thread(target=cleaner, daemon=True).start()
+
+
 @latterpay.route("/")
 def home():
     logger.info("Home endpoint accessed")
@@ -154,12 +172,16 @@ def webhook_debug():
             msg_id = msg_data.get("id")
             msg_from = msg_data.get("from")
 
-            if is_echo_message(msg_id) or msg_data.get("echo") or msg_from in [
+            if is_echo_message(msg_id) or msg_data.get("echo" ) or  message_exists(msg_id) or msg_from in [
                 os.getenv("PHONE_NUMBER_ID"), os.getenv("WHATSAPP_BOT_NUMBER")
             ]:
                 logger.info("Echo/self message ignored.")
                 save_sent_message_id(msg_id)
                 return "ok"
+
+
+
+
 
             save_sent_message_id(msg_id)
             phone = whatsapp.get_mobile(data)
@@ -203,6 +225,7 @@ def webhook_debug():
 if __name__ == "__main__":
     init_db()
     monitor_sessions()
+    cleanup_message_ids()
     port = int(os.environ.get("PORT", 8010))
     logger.info(f"Starting server on port {port}")
     latterpay.run(host="0.0.0.0", port=port)
