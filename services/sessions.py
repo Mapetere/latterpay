@@ -35,9 +35,7 @@ def initialize_session(phone, name):
         print(f"Current sessions: {config.sessions}")
 
         whatsapp.send_message(
-            f"Good day {name}!\n"
-            "I'm latterpay, here to assist you with your ecocash payments to Latter Rain Church(Zimbabwe).\n\n"
-            "To begin , please enter  *payee full name:*  ",
+            f"Good day {name}! To begin, please enter *sender*'s  full name...*  ",
             phone
         )
 
