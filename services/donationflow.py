@@ -95,10 +95,7 @@ def handle_payment_method_step(phone, msg, session):
     save_session(phone, session["step"], session["data"])
     whatsapp.send_message(
         f"✅ *{selected_method} selected!*\n\n"
-        "Please enter the payment *number* / *account* .\n"
-        "_Type *cancel* to exit_",
-        phone
-    )
+        f"To proceed,enter the  {selected_method} number" , phone)
     return "payment_number"
 
 
@@ -321,7 +318,7 @@ def handle_name_step(phone, msg, session):
     session["data"]["name"] = msg.strip().title()
     session["step"] = "region"
     save_session(phone, session["step"], session["data"])
-    whatsapp.send_message("🌍 Enter your congregation name:", phone)
+    whatsapp.send_message("Next step, please enter your congregation name in full...",phone)
     return "ok"
 
 
@@ -342,7 +339,7 @@ def handle_currency_step(phone, msg, session):
 
     session["step"] = "note"
     save_session(phone, session["step"], session["data"])
-    whatsapp.send_message("📝 Any additional notes to clarify your payment purpose?", phone)
+    whatsapp.send_message(" Do you have any additional notes , to clarify payment purpose?", phone)
 
     return "ok"
 
@@ -398,7 +395,7 @@ def handle_donation_type_step(phone, msg, session):
     session["step"] = "amount"
     save_session(phone, session["step"], session["data"])
     whatsapp.send_message(
-        "*Please enter the amount* e.g   40\n\n"
+        "*Please enter the amount*( e.g 40)\n\n" 
         "Please note: Maximum amount per transaction is 480.",
         phone
     )
@@ -412,7 +409,7 @@ def handle_region_step(phone, msg, session):
     session["step"] = "donation_type"
     save_session(phone, session["step"], session["data"])
     whatsapp.send_message(
-        "*Please choose the payment purpose  :*\n" + get_donation_menu() + "\n_Reply with the number._",
+        "*Please choose the payment purpose  :*\n" + get_donation_menu() + "\n\n _reply with a number_",
         phone
     )
     return "ok"

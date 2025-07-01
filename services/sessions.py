@@ -49,7 +49,7 @@ def initialize_session(phone, name="there"):
 
     if not is_known_user(phone):
         whatsapp.send_message(
-            "👋 Hello! I’m *LatterPay*, your trusted donation assistant.\n"
+            "👋 Hello! I’m *LatterPay*, your trusted payments assistant\n"
             "Let’s get started. Please enter the *full name* of the person making the payment.",
             phone
         )
