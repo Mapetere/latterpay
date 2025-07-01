@@ -194,29 +194,5 @@ def save_session(phone, step, data):
 
 
 
-TIMEOUT_MINUTES = 5
-REMINDER_SECONDS = 10
 
-def should_send_timeout_warning(phone):
-    session = load_session(phone)
-    if not session:
-        return False
 
-    last_active = session.get("last_active")
-    if not last_active:
-        return False
-
-    # Make sure last_active is a datetime object
-    if isinstance(last_active, str):
-        last_active = datetime.fromisoformat(last_active)
-
-    now = datetime.now()
-    time_elapsed = now - last_active
-    timeout_duration = timedelta(minutes=TIMEOUT_MINUTES)
-    warning_threshold = timeout_duration - timedelta(seconds=REMINDER_SECONDS)
-
-    if warning_threshold <= time_elapsed < timeout_duration:
-        whatsapp.send_message("⚠️ Just a heads-up! Your session will expire in 10 seconds if you don’t reply.", phone)
-        return True
-
-    return False

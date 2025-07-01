@@ -213,33 +213,6 @@ def handle_payment_number_step(phone, msg, session):
 
 
 
-
-
-def handle_awaiting_payment_step(phone, msg, session):
-    if msg.strip().lower() != "check":
-        whatsapp.send_message(
-            "Type *check* to see if your payment was confirmed.\n"
-            "If you haven’t authorized the payment yet, please do so on your phone.",
-            phone
-        )
-        return "ok"
-
-    poll_url = session.get("poll_url")
-    if not poll_url:
-        whatsapp.send_message("⚠️ No payment in progress.", phone)
-        return "cancel_session"
-    
-
-    paynow = Paynow(
-            "21116",
-            "f6cb151e-10df-45cf-a504-d5dff25249cb",
-            "https://latterpay-production.up.railway.app/payment-return",
-            "https://latterpay-production.up.railway.app/payment-result"
-        )
-    
-
-
-
     def poll_once(paynow, poll_url):
         status = paynow.check_transaction_status(poll_url)
         return status.status
@@ -461,6 +434,5 @@ step_handlers = {
     "awaiting_user_method": ask_for_payment_method,
     "payment_method": handle_payment_method_step,
     "payment_number": handle_payment_number_step,
-    "awaiting_payment": handle_awaiting_payment_step,
     "editing_fields": handle_editing_fields,
 }

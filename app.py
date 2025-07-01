@@ -169,9 +169,6 @@ def webhook_debug():
                 initialize_session(phone, name)
                 return jsonify({"status": "session initialized"}), 200
             
-            if should_send_timeout_warning(phone):
-                # Warning already sent
-                pass
 
             if check_session_timeout(phone):
                 return jsonify({"status": "session timeout"}), 200
