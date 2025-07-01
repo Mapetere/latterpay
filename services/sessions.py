@@ -48,18 +48,19 @@ def monitor_sessions():
                 for session in sessions:
                     phone = session["phone"]
                     last_active = session["last_active"]
+                    warned = session.get("warned", 0)
 
                     minutes_inactive = (now - last_active).total_seconds() / 60
 
-                    # Warn at ~4m50s
-                    if 4< minutes_inactive < 5:
+                    # Warn only once around ~4m50s
+                    if 4 < minutes_inactive < 5 and not warned:
                         whatsapp.send_message(
                             "⚠️ Just a heads-up — your session will expire in a minute.\n"
-                            "Reply with any message to keep me active",
+                            "Reply with any message to keep me active.",
                             phone
                         )
+                        mark_warned(phone)  # You'll define this to update warned = 1
 
-                    # Expire at 5 minutes
                     elif minutes_inactive >= 5:
                         cancel_session(phone)
 
@@ -67,10 +68,31 @@ def monitor_sessions():
 
             except Exception as e:
                 print(f"[MONITOR ERROR] {e}")
-                time.sleep(30)  # wait a bit before retrying in case of crash
+                time.sleep(30)
 
     thread = threading.Thread(target=run_monitor, daemon=True)
     thread.start()
+
+
+def mark_warned(phone):
+    conn = sqlite3.connect("botdata.db", timeout=10)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE sessions SET warned = 1 WHERE phone = ?", (phone,))
+    conn.commit()
+    conn.close()
+
+
+#This will come in handy when I have to update the session's last_active value
+def update_last_active(phone):
+    conn = sqlite3.connect("botdata.db", timeout=10)
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE sessions
+        SET last_active = ?, warned = 0
+        WHERE phone = ?
+    """, (datetime.now(), phone))
+    conn.commit()
+    conn.close()
 
 
 

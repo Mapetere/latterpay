@@ -68,6 +68,10 @@ def init_db():
             data TEXT,  -- store JSON string of session data
             last_active TIMESTAMP
         )
+                   
+        ALTER TABLE sessions ADD COLUMN warned INTEGER DEFAULT 0;
+         
+
     """)
 
     conn.commit()

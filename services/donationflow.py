@@ -43,7 +43,7 @@ def handle_unknown_state(phone, msg, session):
     if session:
         cancel_session(phone)
     save_session(phone, session["step"], session["data"])
-    
+
     return handle_name_step(phone, msg, session)
 
 
@@ -116,6 +116,10 @@ def handle_payment_number_step(phone, msg, session):
                     whatsapp.send_message("❌ Payment failed. Please try again or use a different method.", phone)
                 elif status == "cancelled":
                     whatsapp.send_message("⚠️ Payment was cancelled. You can try again.", phone)
+                elif status == "paid":
+                    whatsapp.send_message("✅ Payment was successful!\n" \
+                    "Your payment has been recorded. Thank you for using latterpay",phone)
+
                 break
             time.sleep(5)  # wait before checking again
 
@@ -212,34 +216,9 @@ def handle_payment_number_step(phone, msg, session):
         logger.exception(f"🔥 Exception during Paynow payment: {e}")
         whatsapp.send_message("❌ Payment error. Please try again later.", phone)
 
-    return "ok"
+   
 
 
-
-
-
-def handle_awaiting_payment_step(phone, msg, session):
-    if msg.strip().lower() != "check":
-        whatsapp.send_message(
-            "Type *check* to see if your payment was confirmed.\n"
-            "If you haven’t authorized the payment yet, please do so on your phone.",
-            phone
-        )
-        return "ok"
-
-    poll_url = session.get("poll_url")
-    if not poll_url:
-        whatsapp.send_message("⚠️ No payment in progress.", phone)
-        return "cancel_session"
-    
-
-    paynow = Paynow(
-            "21116",
-            "f6cb151e-10df-45cf-a504-d5dff25249cb",
-            "https://latterpay-production.up.railway.app/payment-return",
-            "https://latterpay-production.up.railway.app/payment-result"
-        )
-    
 
 
 
