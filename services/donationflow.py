@@ -443,6 +443,5 @@ step_handlers = {
     "awaiting_user_method": ask_for_payment_method,
     "payment_method": handle_payment_method_step,
     "payment_number": handle_payment_number_step,
-    "awaiting_payment": handle_awaiting_payment_step,
     "editing_fields": handle_editing_fields,
 }
