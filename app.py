@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 import threading
 from services.pygwan_whatsapp import whatsapp
 from services.config import CUSTOM_TYPES_FILE, PAYMENTS_FILE
-from services.sessions import check_session_timeout, cancel_session, initialize_session,load_session,save_session, should_send_timeout_warning
+from services.sessions import check_session_timeout, cancel_session, initialize_session,load_session,save_session
 from services.donationflow import handle_user_message
 from services.adminservice import AdminService
 from services.sessions import monitor_sessions
