@@ -3,7 +3,7 @@ from flask import request
 from apscheduler.schedulers.background import BackgroundScheduler
 from services.sendpdf import send_pdf
 from services.generatePR import generate_payment_report 
-from services import  config
+from services.config import finance_phone
 import atexit
 
 
@@ -46,7 +46,7 @@ def send_payment_report_to_finance():
 
         # 3. Send my PDF
         success = send_pdf(
-            phone=config.finance_phone,
+            phone=finance_phone,
             file_path=pdf_path,
             caption="Donation Report"
         )

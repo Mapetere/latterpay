@@ -10,8 +10,8 @@ import logging
 from dotenv import load_dotenv
 
 from services.pygwan_whatsapp import whatsapp
-from services.config import CUSTOM_TYPES_FILE, sessions, PAYMENTS_FILE
-from services.sessions import check_session_timeout, cancel_session, initialize_session
+from services.config import CUSTOM_TYPES_FILE, PAYMENTS_FILE
+from services.sessions import check_session_timeout, cancel_session, initialize_session,load_session,save_session
 from services.donationflow import handle_user_message
 from services.adminservice import AdminService
 
@@ -37,6 +37,9 @@ for file_path in [CUSTOM_TYPES_FILE, PAYMENTS_FILE]:
 
 latterpay = Flask(__name__)
 
+
+
+
 def init_db():
     conn = sqlite3.connect("botdata.db", timeout=10)
     cursor = conn.cursor()
@@ -51,6 +54,15 @@ def init_db():
         CREATE TABLE IF NOT EXISTS known_users (
             phone TEXT PRIMARY KEY,
             first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sessions (
+            phone TEXT PRIMARY KEY,
+            step TEXT,
+            data TEXT,  -- store JSON string of session data
+            last_active TIMESTAMP
         )
     """)
 
@@ -146,7 +158,10 @@ def webhook_debug():
             if phone == os.getenv("ADMIN_PHONE"):
                 return AdminService.handle_admin_command(phone, msg) or jsonify({"status": "processed"}), 200
 
-            if phone not in sessions:
+            # Try to load an existing session from the DB
+            session = load_session(phone)
+
+            if not session:
                 initialize_session(phone, name)
                 return jsonify({"status": "session initialized"}), 200
 
@@ -157,10 +172,13 @@ def webhook_debug():
                 cancel_session(phone)
                 return jsonify({"status": "session cancelled"}), 200
 
-            sessions[phone]["last_active"] = datetime.now()
-            session = sessions[phone]
+            # Update last_active timestamp in the database
+            session["last_active"] = datetime.now()
+            save_session(phone, session["step"], session["data"])  
 
+            # Continue handling the message
             return handle_user_message(phone, msg, session)
+
 
     except Exception as e:
         logger.error(f"Message processing error: {str(e)}", exc_info=True)

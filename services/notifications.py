@@ -1,5 +1,5 @@
 from services.pygwan_whatsapp import whatsapp
-from services import  config
+from services.config import finance_phone
 from datetime import datetime, timedelta
 import os
 
@@ -15,4 +15,4 @@ def notify_finance_director(d):
         f"Congregation: {d['region']}\n"
         f"Note: {d['note']}"
     )
-    whatsapp.send_message(msg, config.finance_phone)
+    whatsapp.send_message(msg, finance_phone)

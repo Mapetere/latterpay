@@ -5,7 +5,6 @@ import json
 import os
 from services import config
 from services.pygwan_whatsapp import whatsapp
-from services.config import sessions
 from services.setup import send_payment_report_to_finance
 
 
@@ -138,6 +137,4 @@ class AdminService:
                 AdminService.handle_approval_command(phone, msg)
                 return "ok"
 
-            elif msg == "/session":
-                whatsapp.send_message(f"📦 Current session:\n```{json.dumps(sessions.get(phone), indent=2)}```", phone)
-                return "ok"   
+           

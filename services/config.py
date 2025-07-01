@@ -9,7 +9,7 @@ phone_number_id = os.getenv("PHONE_NUMBER_ID")
 admin_phone = os.getenv("ADMIN_PHONE") 
 
 
-sessions = {}
+
 
 
 donation_types = ["Monthly Contributions", "August Conference", "Youth Conference", "Construction Contribution", "Pastoral Support"]
