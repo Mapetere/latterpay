@@ -59,21 +59,27 @@ def monitor_sessions():
                             "Reply with any message to keep me active.",
                             phone
                         )
-                         
+                        mark_warned(phone)  
+
                     elif minutes_inactive >= 5:
                         cancel_session(phone)
 
-                
+                time.sleep(60)
 
             except Exception as e:
                 print(f"[MONITOR ERROR] {e}")
-               
+                time.sleep(60)
 
     thread = threading.Thread(target=run_monitor, daemon=True)
     thread.start()
 
 
-
+def mark_warned(phone):
+    conn = sqlite3.connect("botdata.db", timeout=10)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE sessions SET warned = 1 WHERE phone = ?", (phone,))
+    conn.commit()
+    conn.close()
 
 
 #This will come in handy when I have to update the session's last_active value
