@@ -8,7 +8,7 @@ from services.recordpaymentdata import record_payment
 from services.setup import send_payment_report_to_finance
 from services.sessions import check_session_timeout, cancel_session, initialize_session
 from services import config
-from services.config import CUSTOM_TYPES_FILE, donation_types as DONATION_TYPES
+from services.config import CUSTOM_TYPES_FILE,sessions, donation_types as DONATION_TYPES
 from services.pygwan_whatsapp import whatsapp
 from services.getdonationmenu import get_donation_menu, validate_donation_choice
 from services.userstore import is_known_user, add_known_user
@@ -21,8 +21,6 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-
-sessions = config.sessions
 
 step_handlers = {}
 

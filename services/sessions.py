@@ -4,7 +4,9 @@ from datetime import timedelta
 from services.userstore import is_known_user, add_known_user
 from services.pygwan_whatsapp import whatsapp
 from datetime import datetime
-import config  # assuming your sessions are in config.sessions
+import config 
+
+from services.config import sessions
 
 from services.pygwan_whatsapp import whatsapp
 
@@ -34,14 +36,14 @@ def check_session_timeout(phone):
 def initialize_session(phone, name="there"):
     print(f"\nCreating NEW session for {phone} ({name})")
 
-    if phone not in config.sessions:
-        config.sessions[phone] = {
+    if phone not in sessions:
+        sessions[phone] = {
             "step": "name",
             "data": {},
             "last_active": datetime.now()
         }
 
-        print(f"Current sessions: {config.sessions}")
+        print(f"Current sessions: {sessions}")
 
         if not is_known_user(phone):
             # First time? Be formal & fabulous
