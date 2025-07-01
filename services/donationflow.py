@@ -307,25 +307,6 @@ def handle_confirmation_step(phone, msg, session):
 
 
 def handle_name_step(phone, msg, session):
-    if phone not in sessions:
-        sessions[phone] = {"step": "name", "data": {}, "last_active": datetime.now()}
-
-        if not is_known_user(phone):
-            whatsapp.send_message(
-                "👋 Hello! I’m *LatterPay*, your trusted payment/donation assistant.\n"
-                "Let’s get started. Please enter the *full name* of the person making the payment.",
-                phone
-            )
-            add_known_user(phone)
-        else:
-            whatsapp.send_message(
-                "🔄 Welcome back to *LatterPay*!\n"
-                "Back for another donation? Please enter the *name of the person* making this payment.",
-                phone
-            )
-        return "ok"
-
-    # If they're already in a session and just sending the name
     session["data"]["name"] = msg.strip().title()
     session["step"] = "region"
     whatsapp.send_message("🌍 Enter your congregation name:", phone)
