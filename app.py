@@ -47,6 +47,8 @@ latterpay = Flask(__name__)
 def init_db():
     conn = sqlite3.connect("botdata.db", timeout=10)
     cursor = conn.cursor()
+
+    # Sent Messages Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sent_messages (
             msg_id TEXT PRIMARY KEY,
@@ -54,6 +56,7 @@ def init_db():
         )
     """)
 
+    # Known Users Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS known_users (
             phone TEXT PRIMARY KEY,
@@ -61,22 +64,24 @@ def init_db():
         )
     """)
 
+    # Sessions Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sessions (
             phone TEXT PRIMARY KEY,
             step TEXT,
-            data TEXT,  -- store JSON string of session data
+            data TEXT,
             last_active TIMESTAMP
         )
-                   
-        ALTER TABLE sessions ADD COLUMN warned INTEGER DEFAULT 0;
-         
-
     """)
+
+    # Safely added the  'warned' column if it doesn't exist
+    cursor.execute("PRAGMA table_info(sessions)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "warned" not in columns:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN warned INTEGER DEFAULT 0")
 
     conn.commit()
     conn.close()
-
 
 
 def is_echo_message(msg_id):
