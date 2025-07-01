@@ -138,19 +138,19 @@ def handle_payment_number_step(phone, msg, session):
     currency = session["data"].get("currency", "ZWG")
     if currency == "USD":
         paynow = Paynow(
-            os.getenv("PAYNOW_USD_ID"),
-            os.getenv("PAYNOW_USD_KEY"),
-            os.getenv("PAYNOW_RETURN_URL"),
-            os.getenv("PAYNOW_RESULT_URL")
+                "21116",
+                "f6cb151e-10df-45cf-a504-d5dff25249cb",
+                "https://latterpay-production.up.railway.app/payment-return",
+                "https://latterpay-production.up.railway.app/payment-result"
+
         )
     else:
-        paynow = Paynow(
-            os.getenv("PAYNOW_ZWG_ID"),
-            os.getenv("PAYNOW_ZWG_KEY"),
-            os.getenv("PAYNOW_RETURN_URL"),
-            os.getenv("PAYNOW_RESULT_URL")
-        )
-
+       paynow = Paynow(
+                "21227",
+                "c77acfad-18b5-4e24-a94d-23e8ba122302",
+                "https://latterpay-production.up.railway.app/payment-return",
+                "https://latterpay-production.up.railway.app/payment-result"
+            )    
     
     donation_desc = session["data"].get("donation_type", "Donation")
     payment = paynow.create_payment("Order", "mapeterenyasha@gmail.com")
