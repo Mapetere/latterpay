@@ -1,6 +1,10 @@
 from services import  config
 from datetime import datetime
 from datetime import timedelta
+from services.userstore import is_known_user, add_known_user
+from services.pygwan_whatsapp import whatsapp
+from datetime import datetime
+import config  # assuming your sessions are in config.sessions
 
 from services.pygwan_whatsapp import whatsapp
 
@@ -24,19 +28,35 @@ def check_session_timeout(phone):
             return True
     return False
 
-def initialize_session(phone, name):
+
+
+
+def initialize_session(phone, name="there"):
     print(f"\nCreating NEW session for {phone} ({name})")
+
     if phone not in config.sessions:
         config.sessions[phone] = {
             "step": "name",
             "data": {},
             "last_active": datetime.now()
         }
+
         print(f"Current sessions: {config.sessions}")
 
-        whatsapp.send_message(
-            f"Good day {name}! To begin, please enter *sender*'s  full name...*  ",
-            phone
-        )
+        if not is_known_user(phone):
+            # First time? Be formal & fabulous
+            whatsapp.send_message(
+                "👋 Hello! I’m *LatterPay*, your trusted donation assistant.\n"
+                "Let’s get started. Please enter the *full name* of the person making the payment.",
+                phone
+            )
+            add_known_user(phone)
+        else:
+            # They've been here before
+            whatsapp.send_message(
+                "🔄 Welcome back to *LatterPay*!\n"
+                "Back for another donation? Please enter the *name of the person* making this payment.",
+                phone
+            )
 
-        return "ok"
+    return "ok"
