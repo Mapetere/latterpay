@@ -11,6 +11,8 @@ from services import config
 from services.config import CUSTOM_TYPES_FILE, donation_types as DONATION_TYPES
 from services.pygwan_whatsapp import whatsapp
 from services.getdonationmenu import get_donation_menu, validate_donation_choice
+from services.userstore import is_known_user, add_known_user
+
 from decimal import Decimal, InvalidOperation
 import sys
 import logging
@@ -246,7 +248,7 @@ def handle_awaiting_payment_step(phone, msg, session):
 
 def handle_edit_command(phone, session):
     session["step"] = "editing_fields"
-    session["edit_queue"] = ["name", "amount", "donation_type", "region", "note"]
+    session["edit_queue"] = ["name", "region", "donation_type", "amount", "note"]
     session["current_edit"] = session["edit_queue"].pop(0)
     current_value = session["data"].get(session["current_edit"], "")
     whatsapp.send_message(
@@ -307,19 +309,28 @@ def handle_confirmation_step(phone, msg, session):
 def handle_name_step(phone, msg, session):
     if phone not in sessions:
         sessions[phone] = {"step": "name", "data": {}, "last_active": datetime.now()}
-        whatsapp.send_message(
-            "Good day! I'm LatterPay.\nTo begin, please enter your *full name*:", phone
-        )
+
+        if not is_known_user(phone):
+            whatsapp.send_message(
+                "👋 Hello! I’m *LatterPay*, your trusted payment/donation assistant.\n"
+                "Let’s get started. Please enter the *full name* of the person making the payment.",
+                phone
+            )
+            add_known_user(phone)
+        else:
+            whatsapp.send_message(
+                "🔄 Welcome back to *LatterPay*!\n"
+                "Back for another donation? Please enter the *name of the person* making this payment.",
+                phone
+            )
         return "ok"
 
+    # If they're already in a session and just sending the name
     session["data"]["name"] = msg.strip().title()
-    session["step"] = "amount"
-    whatsapp.send_message(
-        "*Please enter the amount* e.g   40\n\n"
-        "Please note: Maximum amount per transaction is 480.",
-        phone
-    )
+    session["step"] = "region"
+    whatsapp.send_message("🌍 Enter your congregation name:", phone)
     return "ok"
+
 
 
 
@@ -332,16 +343,14 @@ def handle_currency_step(phone, msg, session):
     else:
         whatsapp.send_message(
             "❌ Invalid currency selection.\n\n"
-            "Please choose:\n1. USD\n2. ZWG", phone
+            "Choose your currency :\n1. USD\n2. ZWG", phone
         )
         return "currency"
 
-    session["step"] = "donation_type"
-    whatsapp.send_message(
-        "*Choose donation purpose:*\n" + get_donation_menu() + "\n_Reply with the number._",
-        phone
-    )
-    return "donation_type"
+    session["step"] = "note"
+    whatsapp.send_message("📝 Any additional notes to clarify your payment purpose?", phone)
+
+    return "ok"
 
 
 
@@ -388,18 +397,27 @@ def handle_donation_type_step(phone, msg, session):
             f"❌ Invalid selection.\n{response}\nPlease choose a valid number.", phone
         )
         return "ok"
+    
     choice_num = int(msg)
     session["data"]["donation_type"] = DONATION_TYPES[choice_num - 1]
-    session["step"] = "region"
-    whatsapp.send_message("🌍 Enter your congregation name:", phone)
+    session["step"] = "amount"
+    whatsapp.send_message(
+        "*Please enter the amount* e.g   40\n\n"
+        "Please note: Maximum amount per transaction is 480.",
+        phone
+    )
     return "ok"
+
 
 
 
 def handle_region_step(phone, msg, session):
     session["data"]["region"] = msg
-    session["step"] = "note"
-    whatsapp.send_message("📝 Any additional notes to clarify your payment purpose?", phone)
+    session["step"] = "donation_type"
+    whatsapp.send_message(
+        "*Please choose the payment purpose  :*\n" + get_donation_menu() + "\n_Reply with the number._",
+        phone
+    )
     return "ok"
 
 
