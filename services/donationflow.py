@@ -305,52 +305,20 @@ def handle_confirmation_step(phone, msg, session):
 
 
 def handle_name_step(phone, msg, session):
-
-
     if phone not in sessions:
         sessions[phone] = {"step": "name", "data": {}, "last_active": datetime.now()}
         whatsapp.send_message(
             "Good day! I'm LatterPay.\nTo begin, please enter your *full name*:", phone
         )
         return "ok"
-    
-    session["data"]["name"] = msg
+
+    session["data"]["name"] = msg.strip().title()
     session["step"] = "amount"
-    whatsapp.send_message("*Amount?* Enter amount e.g 40\n",
-                          "Please note: Maximum amount per transaction is 480.", phone)
-    
-    amount = float(msg)
-    if amount > 480:
-        whatsapp.send_message("❗ Maximum amount is 480. Please enter a value that is less or equal to 480 .", phone)
-        return "ok"
-    
-    session["data"]["amount"] = amount
-
-    comma = ","
-    if comma in amount.strip():
-        whatsapp.send_message(" Please use '.' instead of ',' in your number")
-        session["data"]["amount'"]=amount
-
-    try:
-
-        dec = Decimal(msg)
-        decimal_places = -dec.as_tuple().exponent
-        if decimal_places not in [0,1,2]:
-            whatsapp.send_message("❗ Please enter amount with 0 , 1 or 2 decimal places only (e.g. 40 , 40.0 or 40.00).", phone)
-            session["data"]["amount"] = amount
-            return "ok"
-
-
-    except InvalidOperation:
-        whatsapp.send_message("❗ Invalid amount format. Try again with numbers only.", phone)
-        session["data"]["amount"] = amount
-
-        return "ok"
-
-    except ValueError:
-        whatsapp.send_message("❗ Invalid amount. Please enter a number (e.g. 50).", phone)
-        session["data"]["amount"] = amount
-
+    whatsapp.send_message(
+        "*Amount?* Enter amount e.g 40\n"
+        "Please note: Maximum amount per transaction is 480.",
+        phone
+    )
     return "ok"
 
 
