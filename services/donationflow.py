@@ -101,6 +101,22 @@ def handle_payment_method_step(phone, msg, session):
 
 
 def handle_payment_number_step(phone, msg, session):
+
+    import threading
+    import time
+
+    def poll_payment_status(phone, poll_url, paynow):
+        for _ in range(30):  # try for 30 * 5 sec = 150 sec max or whatever timeout you want
+            status = paynow.check_transaction_status(poll_url).status
+            if status in ["paid", "cancelled", "failed"]:
+                # Send immediate message
+                if status == "failed":
+                    whatsapp.send_message("❌ Payment failed. Please try again or use a different method.", phone)
+                elif status == "cancelled":
+                    whatsapp.send_message("⚠️ Payment was cancelled. You can try again.", phone)
+                break
+            time.sleep(5)  # wait before checking again
+
     raw = msg.strip()
 
     
@@ -159,39 +175,41 @@ def handle_payment_number_step(phone, msg, session):
     payment.add(donation_desc, amount)
 
     try:
-        logger.debug(f"Sending payment using Paynow method: '{paynow_method}'")
-        response = paynow.send_mobile(payment, formatted, paynow_method)
-        logger.debug(f" Paynow response: {response}")
+            logger.debug(f"Sending payment using Paynow method: '{paynow_method}'")
+            response = paynow.send_mobile(payment, formatted, paynow_method)
+            logger.debug(f" Paynow response: {response}")
 
-        if isinstance(response, str):
-            logger.warning(f"Unexpected string response: {response}")
-            whatsapp.send_message("❌ Payment request failed. Please try again.", phone)
-            return "ok"
+            if isinstance(response, str):
+                logger.warning(f"Unexpected string response: {response}")
+                whatsapp.send_message("❌ Payment request failed. Please try again.", phone)
+                return "ok"
 
-        if hasattr(response, "success") and response.success:
-            poll_url = response.poll_url
-            session["poll_url"] = poll_url
-            session["step"] = "awaiting_payment"
-            save_session(phone, session["step"], session["data"])
-            whatsapp.send_message(
-                "✅ Payment request sent!\n"
-                "Approve the payment on your phone and type *check* to confirm.",
-                phone
-            )
-        else:
-            error_msg = getattr(response, 'error', 'Unknown error')
-            logger.warning(f"❌ Paynow send_mobile failed: {error_msg}")
-            whatsapp.send_message(
-                "❌ Failed to send payment request.\n"
-                "Please check your number and try again or contact support.",
-                phone
-            )
+            if hasattr(response, "success") and response.success:
+                poll_url = response.poll_url 
+                session["poll_url"] = poll_url
+                session["step"] = "awaiting_payment"
+                save_session(phone, session["step"], session["data"])
+                
+                threading.Thread(target=poll_payment_status, args=(phone, poll_url, paynow)).start()
+                
+                whatsapp.send_message(
+                    "✅ Payment request sent!\n"
+                    "Approve the payment on your phone and type *check* to confirm.",
+                    phone
+                )
+            else:
+                error_msg = getattr(response, 'error', 'Unknown error')
+                logger.warning(f"❌ Paynow send_mobile failed: {error_msg}")
+                whatsapp.send_message(
+                    "❌ Failed to send payment request.\n"
+                    "Please check your number and try again or contact support.",
+                    phone
+                )
 
     except Exception as e:
         logger.exception(f"🔥 Exception during Paynow payment: {e}")
         whatsapp.send_message("❌ Payment error. Please try again later.", phone)
 
-    return "ok"
 
 
 
