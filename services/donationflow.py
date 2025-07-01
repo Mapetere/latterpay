@@ -315,7 +315,7 @@ def handle_name_step(phone, msg, session):
     session["data"]["name"] = msg.strip().title()
     session["step"] = "amount"
     whatsapp.send_message(
-        "*Amount?* Enter amount e.g 40\n"
+        "*Please enter the amount* e.g   40\n\n"
         "Please note: Maximum amount per transaction is 480.",
         phone
     )
