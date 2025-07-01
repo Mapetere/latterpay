@@ -11,6 +11,7 @@ from services import config
 from services.config import CUSTOM_TYPES_FILE, donation_types as DONATION_TYPES
 from services.pygwan_whatsapp import whatsapp
 from services.getdonationmenu import get_donation_menu, validate_donation_choice
+from decimal import Decimal, InvalidOperation
 import sys
 import logging
 
@@ -101,105 +102,91 @@ def handle_payment_method_step(phone, msg, session):
 def handle_payment_number_step(phone, msg, session):
     raw = msg.strip()
 
-
-    if raw.startswith("0") and len(raw) == 10: 
+    
+    if raw.startswith("0") and len(raw) == 10:
         formatted = "263" + raw[1:]
     elif raw.startswith("263") and len(raw) == 12:
         formatted = raw
     else:
         whatsapp.send_message("❌ Invalid number format. Use *0771234567* or *263771234567*.", phone)
         return "ok"
-    
-    
 
     session["data"]["phone"] = formatted
 
+    
     try:
         amount = float(session["data"]["amount"])
     except (ValueError, TypeError):
-        whatsapp.send_message("❌ Invalid amount format. Please enter a number e.g 70.\n",
-                              "maximum amount is 500.", phone)
-                            
+        whatsapp.send_message("❌ Invalid amount format. Please enter a number (e.g. 70).", phone)
         return "ok"
 
-
+   
     method = session["data"]["payment_method"].lower()
-    valid_methods = ["ecocash", "onemoney", "zipit", "usd"]
-    if method == "ecocash":
-        method = "ecocash"
-    elif method == "onemoney":
-        method = "onemoney"
-    elif method == "zipit":
-        method = "zipit"
-    elif method == "usd transfer":
-        method = "usd"
+    method_map = {
+        "ecocash": "ecocash",
+        "onemoney": "onemoney",
+        "telecash": "zipit",
+        "usd transfer": "usd"
+    }
 
-    if method not in valid_methods:
+    paynow_method = method_map.get(method)
+    if not paynow_method:
         whatsapp.send_message("❌ Unsupported payment method.", phone)
         return "ok"
 
-    paynow = Paynow(
-        "21116",
-        "f6cb151e-10df-45cf-a504-d5dff25249cb",
-        "https://latterpay-production.up.railway.app/payment-return",
-        "https://latterpay-production.up.railway.app/payment-result"
-    )
+    
+    currency = session["data"].get("currency", "ZWG")
+    if currency == "USD":
+        paynow = Paynow(
+            os.getenv("PAYNOW_USD_ID"),
+            os.getenv("PAYNOW_USD_KEY"),
+            os.getenv("PAYNOW_RETURN_URL"),
+            os.getenv("PAYNOW_RESULT_URL")
+        )
+    else:
+        paynow = Paynow(
+            os.getenv("PAYNOW_ZWG_ID"),
+            os.getenv("PAYNOW_ZWG_KEY"),
+            os.getenv("PAYNOW_RETURN_URL"),
+            os.getenv("PAYNOW_RESULT_URL")
+        )
 
-    donation_desc = session["data"]["donation_type"]
-
+    
+    donation_desc = session["data"].get("donation_type", "Donation")
     payment = paynow.create_payment("Order", "mapeterenyasha@gmail.com")
-
     payment.add(donation_desc, amount)
 
     try:
-        logger.debug(f"Using Paynow method: '{method}'")
+        logger.debug(f"Sending payment using Paynow method: '{paynow_method}'")
+        response = paynow.send_mobile(payment, formatted, paynow_method)
+        logger.debug(f" Paynow response: {response}")
 
-
-        response = paynow.send_mobile(payment, formatted, method)
-
-        logger.debug(f"Raw Paynow response: {response}")
-        logger.debug(f"Response type: {type(response)}")
-        if hasattr(response, "poll_url"):
-            logger.debug(f"Poll URL: {response.poll_url}")
-
-    except Exception as e:
-        logger.warning(f"Paynow SendMobile Exception: {type(e)} - {e}")
-        whatsapp.send_message("❌ Failed to send payment request. Please try again later.", phone)
-        return "ok"
-
-
-    if isinstance(response, str):
-        logger.warning(f"⚠️ Paynow response was a string: {response}")
-        whatsapp.send_message(
-            "❌ Payment request failed (response format issue). Please try again.",
-            phone
-        )
-        return "ok"
-
-    if hasattr(response, "success") and response.success:
-        poll_url = response.poll_url
-        logger.debug(f"✅ Payment Success. Poll URL: {poll_url}")
-        session["poll_url"] = poll_url
-        session["step"] = "awaiting_payment"
-        whatsapp.send_message(
-            "✅ Payment request sent!\n"
-            "Approve it on your phone and type *check* to confirm.",
-            phone
-        )
-    else:
         if isinstance(response, str):
-            logger.warning(f"⚠️ Paynow send_mobile() failed. Error string: {response}")
+            logger.warning(f"Unexpected string response: {response}")
+            whatsapp.send_message("❌ Payment request failed. Please try again.", phone)
+            return "ok"
+
+        if hasattr(response, "success") and response.success:
+            poll_url = response.poll_url
+            session["poll_url"] = poll_url
+            session["step"] = "awaiting_payment"
+            whatsapp.send_message(
+                "✅ Payment request sent!\n"
+                "Approve the payment on your phone and type *check* to confirm.",
+                phone
+            )
         else:
-            logger.warning(f"⚠️ Paynow send_mobile() failed. Error: {getattr(response, 'error', 'Unknown error')}")
+            error_msg = getattr(response, 'error', 'Unknown error')
+            logger.warning(f"❌ Paynow send_mobile failed: {error_msg}")
             whatsapp.send_message(
                 "❌ Failed to send payment request.\n"
                 "Please check your number and try again or contact support.",
                 phone
-            ) 
-        return "ok"
-    
-    if session:
-        session["step"] = "awaiting_payment" 
+            )
+
+    except Exception as e:
+        logger.exception(f"🔥 Exception during Paynow payment: {e}")
+        whatsapp.send_message("❌ Payment error. Please try again later.", phone)
 
     return "ok"
 
@@ -318,32 +305,110 @@ def handle_confirmation_step(phone, msg, session):
 
 
 def handle_name_step(phone, msg, session):
+
+
     if phone not in sessions:
         sessions[phone] = {"step": "name", "data": {}, "last_active": datetime.now()}
         whatsapp.send_message(
             "Good day! I'm LatterPay.\nTo begin, please enter your *full name*:", phone
         )
         return "ok"
+    
     session["data"]["name"] = msg
     session["step"] = "amount"
     whatsapp.send_message("*Amount?* Enter amount e.g 40\n",
-                          "Please note: Maximum amount per transaction is 500.", phone)
+                          "Please note: Maximum amount per transaction is 480.", phone)
+    
+    amount = float(msg)
+    if amount > 480:
+        whatsapp.send_message("❗ Maximum amount is 480. Please enter a value that is less or equal to 480 .", phone)
+        return "ok"
+    
+    session["data"]["amount"] = amount
+
+    comma = ","
+    if comma in amount.strip():
+        whatsapp.send_message(" Please use '.' instead of ',' in your number")
+        session["data"]["amount'"]=amount
+
+    try:
+
+        dec = Decimal(msg)
+        decimal_places = -dec.as_tuple().exponent
+        if decimal_places not in [0,1,2]:
+            whatsapp.send_message("❗ Please enter amount with 0 , 1 or 2 decimal places only (e.g. 40 , 40.0 or 40.00).", phone)
+            session["data"]["amount"] = amount
+            return "ok"
+
+
+    except InvalidOperation:
+        whatsapp.send_message("❗ Invalid amount format. Try again with numbers only.", phone)
+        session["data"]["amount"] = amount
+
+        return "ok"
+
+    except ValueError:
+        whatsapp.send_message("❗ Invalid amount. Please enter a number (e.g. 50).", phone)
+        session["data"]["amount"] = amount
+
     return "ok"
+
+
+
+def handle_currency_step(phone, msg, session):
+    currency = msg.strip()
+    if currency == "1":
+        session["data"]["currency"] = "USD"
+    elif currency == "2":
+        session["data"]["currency"] = "ZWG"
+    else:
+        whatsapp.send_message(
+            "❌ Invalid currency selection.\n\n"
+            "Please choose:\n1. USD\n2. ZWG", phone
+        )
+        return "currency"
+
+    session["step"] = "donation_type"
+    whatsapp.send_message(
+        "*Choose donation purpose:*\n" + get_donation_menu() + "\n_Reply with the number._",
+        phone
+    )
+    return "donation_type"
 
 
 
 def handle_amount_step(phone, msg, session):
     try:
+        # Check for comma instead of dot
+        if ',' in msg:
+            whatsapp.send_message("❗ Please use '.' instead of ',' for decimal values.", phone)
+            return "ok"
+
         amount = float(msg)
+        dec = Decimal(msg)
+        decimal_places = -dec.as_tuple().exponent
+
+        if decimal_places not in [0, 1, 2]:
+            whatsapp.send_message("❗ Please enter amount with 0, 1 or 2 decimal places only (e.g. 40, 40.0, or 40.00).", phone)
+            return "ok"
+
+        if amount > 480:
+            whatsapp.send_message("❗ Maximum amount is 480. Please enter a value that is less or equal to 480.", phone)
+            return "ok"
+
         session["data"]["amount"] = amount
-        session["step"] = "donation_type"
+        session["step"] = "currency"
         whatsapp.send_message(
-            "*Choose donation purpose:*\n" + get_donation_menu() + "\n_Reply with the number._",
-            phone
+            "*Choose your preferred currency:*\n"
+            "1. USD\n"
+            "2. ZWG", phone
         )
-    except ValueError:
+
+    except (ValueError, InvalidOperation):
         whatsapp.send_message("❗ Invalid amount. Please enter a number (e.g. 50).", phone)
+
     return "ok"
+
 
 
 
@@ -389,6 +454,7 @@ def handle_note_step(phone, msg, session):
 step_handlers = {
     "name": handle_name_step,
     "amount": handle_amount_step,
+    "currency": handle_currency_step, 
     "donation_type": handle_donation_type_step,
     "region": handle_region_step,
     "note": handle_note_step,
