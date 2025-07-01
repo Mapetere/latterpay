@@ -55,7 +55,7 @@ def monitor_sessions():
                     # Warn only once around ~4m50s
                     if 4 < minutes_inactive < 5 and not warned:
                         whatsapp.send_message(
-                            "⚠️ Just a heads-up , your session will expire in a minute.\m\n"
+                            "⚠️ Just a heads-up , your session will expire in a minute.\n\n"
                             "_Reply with any message to keep me active_.",
                             phone
                         )
