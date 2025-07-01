@@ -31,20 +31,20 @@ def setup_scheduled_reports():
 
 def send_payment_report_to_finance():
     try:
-        # 1. Generate PDF
+        # 1. Generate my PDF
         pdf_path = generate_payment_report()
         if not pdf_path:
             print(" PDF generation failed")
             return False
 
-        # 2. Verify PDF
+        # 2. Verify the PDF
         if not os.path.exists(pdf_path):
             print(f"PDF not found at {pdf_path}")
             return False
 
         print(f" PDF generated ({os.path.getsize(pdf_path)} bytes)")
 
-        # 3. Send PDF
+        # 3. Send my PDF
         success = send_pdf(
             phone=config.finance_phone,
             file_path=pdf_path,
@@ -63,7 +63,7 @@ def send_payment_report_to_finance():
 
 PHONE_NUMBER_ID = " 666157656583239"
 ACCESS_TOKEN = "EAAIrEZAia0v8BO5xHnuGXNrzsBTgqzlTkKyjFFfDll46bMGVzoXV3mJjq9NLAwsTd8RPREz6grYGD3musybZAjK1Uy46H1Q2vcVyWL2fehKUtZC6S6QwdsLWeckZBIXG4WaWbcwtbhoUI4LDy6G5WyNlow82MBBWkbtwd1mCSVEP9sIuDEhLinmug5PBLmKMXgZDZD"
-PIN = "123456"  # Use your PIN here
+PIN = "1"  
     
 def register_phone_number(phone_number_id, access_token, pin):
     access_token = ACCESS_TOKEN

@@ -23,6 +23,8 @@ sessions = config.sessions
 
 step_handlers = {}
 
+
+
 def handle_user_message(phone, msg, session):
     step = session.get("step", "name")
     handler = step_handlers.get(step)
@@ -33,10 +35,13 @@ def handle_user_message(phone, msg, session):
     
 
 
+
 def handle_unknown_state(phone, msg, session):
     whatsapp.send_message("Hmm... I got lost. Let me reset your donation flow from the last known point.", phone)
     session["step"] = "name"
     return handle_name_step(phone, msg, session)
+
+
 
 
 def ask_for_payment_method(phone,msg=None,session=None):
@@ -44,7 +49,7 @@ def ask_for_payment_method(phone,msg=None,session=None):
         "*Select Payment Method:*\n"
         "1. EcoCash\n"
         "2. OneMoney\n"
-        "3. ZIPIT\n"
+        "3. Telecash\n"
         "4. USD Transfer\n\n"
         "_Reply with the number corresponding to your preferred method_",
         phone
@@ -57,12 +62,13 @@ def ask_for_payment_method(phone,msg=None,session=None):
 
 
 
+
 def handle_payment_method_step(phone, msg, session):
     msg = msg.strip()
     payment_options = {
         "1": "EcoCash",
         "2": "OneMoney",
-        "3": "ZIPIT",
+        "3": "TeleCash",
         "4": "USD Transfer"
     }
     selected_method = payment_options.get(msg)
@@ -72,7 +78,7 @@ def handle_payment_method_step(phone, msg, session):
             "Please reply with a number from the list:\n\n"
             "*1.* EcoCash\n"
             "*2.* OneMoney\n"
-            "*3.* ZIPIT\n"
+            "*3.* TeleCash\n"
             "*4.* USD Transfer\n\n"
             "_Choose your preferred method_",
             phone
@@ -84,7 +90,7 @@ def handle_payment_method_step(phone, msg, session):
     session["step"] = "payment_number"
     whatsapp.send_message(
         f"✅ *{selected_method} selected!*\n\n"
-        "Please enter the payment *number* or *account* to send to.\n"
+        "Please enter the payment *number* / *account* .\n"
         "_Type *cancel* to exit_",
         phone
     )
@@ -111,7 +117,9 @@ def handle_payment_number_step(phone, msg, session):
     try:
         amount = float(session["data"]["amount"])
     except (ValueError, TypeError):
-        whatsapp.send_message("❌ Invalid amount format. Please enter a number like 5000.", phone)
+        whatsapp.send_message("❌ Invalid amount format. Please enter a number e.g 70.\n",
+                              "maximum amount is 500.", phone)
+                            
         return "ok"
 
 
@@ -223,14 +231,12 @@ def handle_awaiting_payment_step(phone, msg, session):
     
 
 
+
     def poll_once(paynow, poll_url):
         status = paynow.check_transaction_status(poll_url)
         return status.status
 
     result = poll_once(paynow, poll_url)
-
-
-
 
 
     if result == "paid":
@@ -248,6 +254,7 @@ def handle_awaiting_payment_step(phone, msg, session):
         whatsapp.send_message("⏳ Payment still processing. Please wait a minute and type *check* again.", phone)
 
     return "ok"
+
 
 
 def handle_edit_command(phone, session):
@@ -308,6 +315,8 @@ def handle_confirmation_step(phone, msg, session):
         whatsapp.send_message("Invalid option. Type *confirm*, *edit*, or *cancel*.", phone)
         return "ok"
 
+
+
 def handle_name_step(phone, msg, session):
     if phone not in sessions:
         sessions[phone] = {"step": "name", "data": {}, "last_active": datetime.now()}
@@ -317,8 +326,11 @@ def handle_name_step(phone, msg, session):
         return "ok"
     session["data"]["name"] = msg
     session["step"] = "amount"
-    whatsapp.send_message("*Amount?* Enter amount (Maximum amount is 500)). Type *cancel* to exit.", phone)
+    whatsapp.send_message("*Amount?* Enter amount e.g 40\n",
+                          "Please note: Maximum amount per transaction is 500.", phone)
     return "ok"
+
+
 
 def handle_amount_step(phone, msg, session):
     try:
@@ -332,6 +344,7 @@ def handle_amount_step(phone, msg, session):
     except ValueError:
         whatsapp.send_message("❗ Invalid amount. Please enter a number (e.g. 50).", phone)
     return "ok"
+
 
 
 def handle_donation_type_step(phone, msg, session):
@@ -349,11 +362,13 @@ def handle_donation_type_step(phone, msg, session):
     return "ok"
 
 
+
 def handle_region_step(phone, msg, session):
     session["data"]["region"] = msg
     session["step"] = "note"
     whatsapp.send_message("📝 Any additional notes to clarify your payment purpose?", phone)
     return "ok"
+
 
 
 def handle_note_step(phone, msg, session):
@@ -369,7 +384,8 @@ def handle_note_step(phone, msg, session):
     )
     return "ok"
 
-# Register handlers in the shared map
+
+
 step_handlers = {
     "name": handle_name_step,
     "amount": handle_amount_step,
