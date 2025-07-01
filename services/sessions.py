@@ -55,8 +55,8 @@ def monitor_sessions():
                     # Warn only once around ~4m50s
                     if 4 < minutes_inactive < 5 and not warned:
                         whatsapp.send_message(
-                            "⚠️ Just a heads-up — your session will expire in a minute.\n"
-                            "Reply with any message to keep me active.",
+                            "⚠️ Just a heads-up , your session will expire in a minute.\m\n"
+                            "_Reply with any message to keep me active_.",
                             phone
                         )
                         mark_warned(phone)  
@@ -103,8 +103,8 @@ def cancel_session(phone):
         delete_session(phone)
 
     whatsapp.send_message(
-        "🚫 Your donation session has been cancelled. "
-        "You can start a new donation anytime by sending a message.",
+        "🚫 Your donation session has been cancelled.\n\n "
+        "_You can start a new donation anytime by sending a message._",
         phone
     )
 
