@@ -6,8 +6,72 @@ from services.pygwan_whatsapp import whatsapp
 from datetime import datetime
 import json
 import sqlite3
+from datetime import datetime, timedelta
+import threading
+import time
+from services.pygwan_whatsapp import whatsapp
+
+import time
 
 from services.pygwan_whatsapp import whatsapp
+
+last_active = datetime.now().isoformat()
+
+
+
+def get_all_sessions():
+    conn = sqlite3.connect("botdata.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT phone, step, data, last_active FROM sessions")
+    rows = cursor.fetchall()
+    conn.close()
+
+    sessions = []
+    for phone, step, data_json, last_active in rows:
+        sessions.append({
+            "phone": phone,
+            "step": step,
+            "data": json.loads(data_json),
+            "last_active": datetime.fromisoformat(last_active)
+        })
+    return sessions
+
+
+
+def monitor_sessions():
+    def run_monitor():
+        while True:
+            try:
+                sessions = get_all_sessions()
+                now = datetime.now()
+
+                for session in sessions:
+                    phone = session["phone"]
+                    last_active = session["last_active"]
+
+                    minutes_inactive = (now - last_active).total_seconds() / 60
+
+                    # Warn at ~4m50s
+                    if 4.83 < minutes_inactive < 5:
+                        whatsapp.send_message(
+                            "⚠️ Just a heads-up — your session will expire in 10 seconds.\n"
+                            "Reply with any message to keep me active",
+                            phone
+                        )
+
+                    # Expire at 5 minutes
+                    elif minutes_inactive >= 5:
+                        cancel_session(phone)
+
+                time.sleep(10)
+
+            except Exception as e:
+                print(f"[MONITOR ERROR] {e}")
+                time.sleep(30)  # wait a bit before retrying in case of crash
+
+    thread = threading.Thread(target=run_monitor, daemon=True)
+    thread.start()
+
 
 
 def cancel_session(phone):
@@ -29,7 +93,12 @@ def check_session_timeout(phone):
     if session:
         last_active = session.get("last_active")
         if last_active and (datetime.now() - datetime.fromisoformat(last_active)) > timedelta(minutes=5):
-            cancel_session(phone)
+            delete_session(phone)
+            whatsapp.send_message(
+               "Opps, your session has timed out due to inactivity. "
+               "Please start a new donation session by sending a message.",
+                phone 
+            )
             return True
     return False
 
@@ -125,3 +194,29 @@ def save_session(phone, step, data):
 
 
 
+TIMEOUT_MINUTES = 5
+REMINDER_SECONDS = 10
+
+def should_send_timeout_warning(phone):
+    session = load_session(phone)
+    if not session:
+        return False
+
+    last_active = session.get("last_active")
+    if not last_active:
+        return False
+
+    # Make sure last_active is a datetime object
+    if isinstance(last_active, str):
+        last_active = datetime.fromisoformat(last_active)
+
+    now = datetime.now()
+    time_elapsed = now - last_active
+    timeout_duration = timedelta(minutes=TIMEOUT_MINUTES)
+    warning_threshold = timeout_duration - timedelta(seconds=REMINDER_SECONDS)
+
+    if warning_threshold <= time_elapsed < timeout_duration:
+        whatsapp.send_message("⚠️ Just a heads-up! Your session will expire in 10 seconds if you don’t reply.", phone)
+        return True
+
+    return False

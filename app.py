@@ -8,12 +8,16 @@ from paynow import Paynow
 import sys
 import logging
 from dotenv import load_dotenv
-
+import threading
 from services.pygwan_whatsapp import whatsapp
 from services.config import CUSTOM_TYPES_FILE, PAYMENTS_FILE
-from services.sessions import check_session_timeout, cancel_session, initialize_session,load_session,save_session
+from services.sessions import check_session_timeout, cancel_session, initialize_session,load_session,save_session, should_send_timeout_warning
 from services.donationflow import handle_user_message
 from services.adminservice import AdminService
+from services.sessions import monitor_sessions
+
+
+
 
 
 logging.basicConfig(
@@ -164,9 +168,14 @@ def webhook_debug():
             if not session:
                 initialize_session(phone, name)
                 return jsonify({"status": "session initialized"}), 200
+            
+            if should_send_timeout_warning(phone):
+                # Warning already sent
+                pass
 
             if check_session_timeout(phone):
                 return jsonify({"status": "session timeout"}), 200
+
 
             if msg.lower() == "cancel":
                 cancel_session(phone)
@@ -184,8 +193,10 @@ def webhook_debug():
         logger.error(f"Message processing error: {str(e)}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
 if __name__ == "__main__":
     init_db()
+    monitor_sessions()
     port = int(os.environ.get("PORT", 8010))
     logger.info(f"Starting server on port {port}")
     latterpay.run(host="0.0.0.0", port=port)
