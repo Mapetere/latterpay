@@ -183,7 +183,7 @@ def webhook_debug():
 
 
 
-            save_sent_message_id(msg_id)
+            
             phone = whatsapp.get_mobile(data)
             name = whatsapp.get_name(data)
             msg = whatsapp.get_message(data).strip()
@@ -193,7 +193,7 @@ def webhook_debug():
             if phone == os.getenv("ADMIN_PHONE"):
                 return AdminService.handle_admin_command(phone, msg) or jsonify({"status": "processed"}), 200
 
-            # Try to load an existing session from the DB
+            # Try to load an existing session from the my database2112211
             session = load_session(phone)
 
             if not session:
@@ -225,7 +225,6 @@ def webhook_debug():
 if __name__ == "__main__":
     init_db()
     monitor_sessions()
-    cleanup_message_ids()
     port = int(os.environ.get("PORT", 8010))
     logger.info(f"Starting server on port {port}")
     latterpay.run(host="0.0.0.0", port=port)
