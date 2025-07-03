@@ -105,6 +105,7 @@ def handle_admin_user(phone, msg, session):
 
 
 def handle_admin_command(phone, msg):
+    msg = msg.strip().lower()
     if msg == "/admin":
         whatsapp.send_message(
             "👩🏾‍💼 *Admin Panel*\n\n"
