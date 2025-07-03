@@ -31,7 +31,50 @@ class AdminService:
         except Exception as e:
             config.whatsapp.send_message(f"❌ Error: {str(e)}", admin_phone)
             return False
+        
+
+
+    @staticmethod
+    def handle_admin_command(phone, msg):
+        msg = msg.strip().lower()
+        if msg == "/admin":
+            whatsapp.send_message(
+                "👩🏾‍💼 *Admin Panel*\n\n"
+                "Use the following commands:\n"
+                "• /report pdf   (_Download payment report in PDF_)\n"
+                "• /report excel (_Download payment report in Excel_)\n"
+                "• /approve [txn_id]\n"
+                "• /session [user_phone]",
+                phone
+            )
+            return "ok"
+
+        elif msg == "/report pdf":
+            send_payment_report_to_finance("pdf")
+            whatsapp.send_message("✅ PDF report sent to finance.", phone)
+            return "ok"
+
+        elif msg == "/report excel":
+            send_payment_report_to_finance("excel")
+            whatsapp.send_message("✅ Excel report sent to finance.", phone)
+            return "ok"
+
+        elif msg.startswith("/approve") or msg.startswith("/session"):
+            AdminService.handle_approval_command(phone, msg)
+            return "ok"
+
+        else:
+            whatsapp.send_message("❌ Unknown command. Type `/admin` to see available commands.", phone)
+            return "ok"
+
     
+
+
+
+
+
+
+
 
     @staticmethod
     def notify_approval_request(user_phone, donation_description):
