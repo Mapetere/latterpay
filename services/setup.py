@@ -3,6 +3,7 @@ from flask import request
 from apscheduler.schedulers.background import BackgroundScheduler
 from services.sendpdf import send_pdf
 from services.generatePR import generate_payment_report 
+from services.generateER import generate_excel_report
 from services.config import finance_phone
 import atexit
 
@@ -29,33 +30,45 @@ def setup_scheduled_reports():
 
     atexit.register(lambda: scheduler.shutdown())
 
-def send_payment_report_to_finance():
+
+
+def send_payment_report_to_finance(report_format="pdf"):
     try:
-        # 1. Generate my PDF
-        pdf_path = generate_payment_report()
-        if not pdf_path:
-            print(" PDF generation failed")
+        # 1. Generate the report
+        if report_format == "excel":
+            report_path = generate_excel_report()
+        else:
+            report_path = generate_payment_report()
+
+        if not report_path:
+            print(f"{report_format.upper()} generation failed.")
             return False
 
-        # 2. Verify the PDF
-        if not os.path.exists(pdf_path):
-            print(f"PDF not found at {pdf_path}")
+       
+        if not os.path.exists(report_path):
+            print(f"{report_format.upper()} not found at {report_path}")
             return False
 
-        print(f" PDF generated ({os.path.getsize(pdf_path)} bytes)")
+        print(f"{report_format.upper()} generated ({os.path.getsize(report_path)} bytes)")
 
-        # 3. Send my PDF
-        success = send_pdf(
+        #  Send the file
+        caption = f"Donation Report ({report_format.upper()})"
+        success = send_pdf(  
             phone=finance_phone,
-            file_path=pdf_path,
-            caption="Donation Report"
+            file_path=report_path,
+            caption=caption
         )
 
-        # 4. Clean up
-        if os.path.exists(pdf_path):
-            os.unlink(pdf_path)
+      
+        if os.path.exists(report_path):
+            os.unlink(report_path)
 
         return success
+
+    except Exception as e:
+        print(f"[REPORT ERROR] Failed to send {report_format.upper()} report: {e}")
+        return False
+
 
     except Exception as e:
         print(f" Error in send_payment_report_to_finance: {e}")
