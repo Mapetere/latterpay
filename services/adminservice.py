@@ -9,6 +9,29 @@ from services.setup import send_payment_report_to_finance
 
 
 class AdminService:
+    @staticmethod
+    def handle_approval_command(admin_phone, msg):
+        """Process admin approval commands"""
+        if msg.lower() == "cancel":
+            return True
+        
+        try:
+            parts = msg.split()
+            if len(parts) < 3:
+                raise ValueError("Format: /approve [phone] [duration]")
+            
+            user_phone = parts[1]
+            duration = parts[2]
+            
+            return AdminService._process_approval(
+                admin_phone=admin_phone,
+                user_phone=user_phone,
+                duration=duration
+            )
+        except Exception as e:
+            config.whatsapp.send_message(f"❌ Error: {str(e)}", admin_phone)
+            return False
+    
 
     @staticmethod
     def notify_approval_request(user_phone, donation_description):
