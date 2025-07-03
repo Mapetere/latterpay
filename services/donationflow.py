@@ -11,7 +11,7 @@ from services import config
 from services.config import donation_types as DONATION_TYPES
 from services.pygwan_whatsapp import whatsapp
 from services.getdonationmenu import get_donation_menu, validate_donation_choice
-from services.adminservice import handle_approval_command
+from services.adminservice import AdminService
 from services.sessions import delete_session, load_session,save_session
 from decimal import Decimal, InvalidOperation
 from services.sessions import (
@@ -129,7 +129,7 @@ def handle_admin_command(phone, msg):
         return "ok"
 
     elif msg.startswith("/approve") or msg.startswith("/session"):
-        handle_approval_command(phone, msg)
+        AdminService.handle_approval_command(phone, msg)
         return "ok"
 
     else:
