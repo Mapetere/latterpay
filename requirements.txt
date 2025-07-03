@@ -1,0 +1,9 @@
+pygwan
+fpdf
+requests
+pandas
+flask
+gunicorn
+python-dotenv
+apscheduler
+paynow

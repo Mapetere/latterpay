@@ -1,11 +1,11 @@
-from services import  config
+from services.config import PAYMENTS_FILE
 import json
 from datetime import datetime
 
 def record_payment(payment_data):
     """Record a new payment in the payments file"""
     try:
-        with open(config.PAYMENTS_FILE, 'r') as f:
+        with open(PAYMENTS_FILE, 'r') as f:
             payments = json.load(f)
         
         payments.append({
@@ -17,7 +17,7 @@ def record_payment(payment_data):
             "note": payment_data.get("note", "")
         })
         
-        with open(config.PAYMENTS_FILE, 'w') as f:
+        with open(PAYMENTS_FILE, 'w') as f:
             json.dump(payments, f)
         
         print("Payment recorded successfully.")

@@ -2,7 +2,11 @@
 # services/admin_service.py
 from datetime import datetime, timedelta
 import json
+import os
 from services import config
+from services.pygwan_whatsapp import whatsapp
+from services.setup import send_payment_report_to_finance
+
 
 class AdminService:
     @staticmethod
@@ -11,24 +15,23 @@ class AdminService:
         if msg.lower() == "cancel":
             return True
         
-        if msg.startswith("/approve"):
-            try:
-                parts = msg.split()
-                if len(parts) < 3:
-                    raise ValueError("Format: /approve [phone] [duration]")
-                
-                user_phone = parts[1]
-                duration = parts[2]
-                
-                return AdminService._process_approval(
-                    admin_phone=admin_phone,
-                    user_phone=user_phone,
-                    duration=duration
-                )
-            except Exception as e:
-                config.whatsapp.send_message(f"❌ Error: {str(e)}", admin_phone)
-                return False
-        return False
+        try:
+            parts = msg.split()
+            if len(parts) < 3:
+                raise ValueError("Format: /approve [phone] [duration]")
+            
+            user_phone = parts[1]
+            duration = parts[2]
+            
+            return AdminService._process_approval(
+                admin_phone=admin_phone,
+                user_phone=user_phone,
+                duration=duration
+            )
+        except Exception as e:
+            config.whatsapp.send_message(f"❌ Error: {str(e)}", admin_phone)
+            return False
+    
 
     @staticmethod
     def notify_approval_request(user_phone, donation_description):

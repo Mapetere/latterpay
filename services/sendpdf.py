@@ -1,13 +1,13 @@
 import os
 import requests
-from services import  config
+from services.config import access_token,phone_number_id
 
 
 
 def send_pdf(phone, file_path, caption):
     
 
-    url = f"https://graph.facebook.com/v18.0/{config.phone_number_id}/media"
+    url = f"https://graph.facebook.com/v18.0/{phone_number_id}/media"
 
     # Upload media
     with open(file_path, 'rb') as f:
@@ -16,7 +16,7 @@ def send_pdf(phone, file_path, caption):
             'messaging_product': 'whatsapp'
         }
         headers = {
-            'Authorization': f'Bearer {config.access_token}'
+            'Authorization': f'Bearer {access_token}'
         }
         response = requests.post(url, files=files, data=data, headers=headers)
         print(response.json())
@@ -24,7 +24,7 @@ def send_pdf(phone, file_path, caption):
 
     # Send document using media_id
     if media_id:
-        send_url = f"https://graph.facebook.com/v18.0/{config.phone_number_id}/messages"
+        send_url = f"https://graph.facebook.com/v18.0/{phone_number_id}/messages"
         payload = {
             "messaging_product": "whatsapp",
             "to": phone,

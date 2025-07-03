@@ -1,242 +1,230 @@
-from flask import Flask, request
-from apscheduler.schedulers.background import BackgroundScheduler
+from flask import Flask, request, jsonify
+from datetime import datetime
 import os
-from datetime import datetime, timedelta
 import json
+import sqlite3
+from sqlite3 import OperationalError
+from paynow import Paynow
+import sys
+import time
+import logging
+from dotenv import load_dotenv
+import threading
 from services.pygwan_whatsapp import whatsapp
-from services.config import sessions, donation_types, CUSTOM_TYPES_FILE, PAYMENTS_FILE
-from services.cleanup import cleanup_expired_donation_types
-from services.setup import  setup_scheduled_reports
-
-app = Flask(__name__)
-
-
-# Initialize custom donation types from file if it doesn't exist
-if not os.path.exists(CUSTOM_TYPES_FILE):
-    with open(CUSTOM_TYPES_FILE, 'w') as f:
-        json.dump([], f)
+from services.config import CUSTOM_TYPES_FILE, PAYMENTS_FILE
+from services.sessions import check_session_timeout, cancel_session, initialize_session,load_session,save_session
+from services.donationflow import handle_user_message
+from services.adminservice import AdminService
+from services.sessions import monitor_sessions
 
 
 
-@app.route("/webhook", methods=["GET", "POST"])
-def webhook():
-    if request.method == "GET":
-        if request.args.get("hub.verify_token") == os.getenv("VERIFY_TOKEN"):
-            return request.args.get("hub.challenge")
-        return "Invalid verify token", 403
 
-    print("[WEBHOOK] POST triggered")
-    data = request.get_json()
-    print(f"Received data: {json.dumps(data, indent=2)}")  # Better debug output
-    
-    if not whatsapp.is_message(data):
-        return "ok"  # Not a message we care about
 
-    phone = whatsapp.get_mobile(data)
-    name = whatsapp.get_name(data)
-    msg = whatsapp.get_message(data).lower().strip()
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('app.log')
+    ]
+)
+logger = logging.getLogger(__name__)
 
-    # 🧑🏾‍💼 Admin-only commands (handle early and exit)
-    if phone == os.getenv("ADMIN_PHONE"):
-        # ADMIN COMMANDS HANDLING (ADD THIS SECTION)
-        if msg == "/admin":
-            whatsapp.send_message(
-                "👩🏾‍💼 *Admin Panel*\n"
-                "Use the following commands:\n"
-                "• /report pdf or /report excel\n"
-                "• /approve \n"
-                "• /session — View current session state",
-                phone
-            )
-            return "ok"
 
-        elif msg == "/report pdf":
-            from services.notifications import send_payment_report_to_finance
-            send_payment_report_to_finance("pdf")
-            whatsapp.send_message("✅ PDF report sent to finance.", phone)
-            return "ok"
+load_dotenv()
 
-        elif msg == "/report excel":
-            send_payment_report_to_finance("excel")
-            whatsapp.send_message("✅ Excel report sent to finance.", phone)
-            return "ok"
 
-        elif msg.startswith("/approve") or msg.startswith("/session"):
-            from services.notifications import handle_admin_approval
-            handle_admin_approval(phone, msg)
-            return "ok"
+for file_path in [CUSTOM_TYPES_FILE, PAYMENTS_FILE]:
+    if not os.path.exists(file_path):
+        with open(file_path, 'w') as f:
+            json.dump([], f)
 
-        elif msg == "/session":
-            whatsapp.send_message(f"📦 Current session:\n```{json.dumps(sessions.get(phone), indent=2)}```", phone)
-            return "ok"
+latterpay = Flask(__name__)
 
-    
 
-    # Check for timeout first
-    from services.recordpaymentdata import record_payment
-    from services.sessions import check_session_timeout, cancel_session
 
-    if check_session_timeout(phone):
-        return "ok"
-    
-    
-    # Handle regular user messages
-    if msg == "cancel":
-        cancel_session(phone)
-        return "ok"
-    
-    
 
-    # Initialize session if it doesn't exist
-    if phone not in sessions:
-        sessions[phone] = {
-            "step": "name", 
-            "data": {},
-            "last_active": datetime.now()
-        }
-        whatsapp.send_message(
-            f"Hi {name}! Welcome to the Latter Rain Church Donation Bot.\n"
-            "Kindly enter your *full name*\n\n"
-            "_You can type *cancel* at any time to exit._", 
-            phone
+def init_db():
+    conn = sqlite3.connect("botdata.db", timeout=10)
+    cursor = conn.cursor()
+
+    # Sent Messages Table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sent_messages (
+            msg_id TEXT PRIMARY KEY,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-        return "ok"
-    
-    # Update activity timestamp
-    sessions[phone]["last_active"] = datetime.now()
-    session = sessions[phone]
+    """)
 
-    # Handle session steps
-    if session["step"] == "name":
-        session["data"]["name"] = msg
-        session["step"] = "amount"
-        whatsapp.send_message(
-            "💰 *How much would you like to donate?*\n"
-            "Enter amount (e.g. 5000)\n\n"
-            "_Type *cancel* to exit_",
-            phone
+    # Known Users Table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS known_users (
+            phone TEXT PRIMARY KEY,
+            first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
+    """)
+
+    # Sessions Table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sessions (
+            phone TEXT PRIMARY KEY,
+            step TEXT,
+            data TEXT,
+            last_active TIMESTAMP
+        )
+    """)
+
+    # Safely added the  'warned' column if it doesn't exist
+    cursor.execute("PRAGMA table_info(sessions)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "warned" not in columns:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN warned INTEGER DEFAULT 0")
+
+    conn.commit()
+    conn.close()
 
 
-    elif session["step"] == "amount":
-        try:
-            # Validate it's a number
-            float(msg)
-            session["data"]["amount"] = msg
-            session["step"] = "donation_type"
-            from services.getdonationmenu import get_donation_menu
-            whatsapp.send_message(
-                "🙏🏾 *Please choose the purpose of your donation:*\n\n"
-                f"{get_donation_menu()}\n\n"
-                "_Reply with the number (1-4)_\n"
-                "_Type *cancel* to exit_",
-                phone
-            )
-        except ValueError:
-            whatsapp.send_message(
-                "❗*Invalid Amount*\n"
-                "Please enter a valid number (e.g. 5000)\n\n"
-                "_Type *cancel* to exit_",
-                phone
-            )
+def is_echo_message(msg_id):
+    conn = sqlite3.connect("botdata.db", timeout=10)
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM sent_messages WHERE msg_id = ?", (msg_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return result is not None
 
-    elif session["step"] == "donation_type":
-        menu=get_donation_menu()
-        max_options=len(menu)
+def save_sent_message_id(msg_id):
+    conn = sqlite3.connect("botdata.db", timeout=10)
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR IGNORE INTO sent_messages (msg_id) VALUES (?)", (msg_id,))
+    conn.commit()
+    conn.close()
 
-        # Check for cancellation first
-        if msg.lower() == "cancel":
-            cancel_session(phone)
-            return "ok"
-         # Validate selection
-        from services.getdonationmenu import validate_donation_choice
-        is_valid, response = validate_donation_choice(msg, max_options)
+def delete_old_ids():
+    conn = sqlite3.connect("botdata.db", timeout=10)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM sent_messages WHERE sent_at < datetime('now', '-15 minutes')")
+    conn.commit()
+    conn.close()
+
+def message_exists(msg_id):
+    return is_echo_message(msg_id)
 
 
-        if not is_valid:
-            whatsapp.send_message(
-                f"❌ *Invalid Selection*\n"
-                f"{response}\n\n"
-                f"Please choose:\n" + 
-                "\n".join(menu) +
-                "\n\n_Tap a number or type *cancel*_",
-                phone
-            )
-            return "ok"
-    
-        choice_num = response 
+def cleanup_message_ids():
+    def cleaner():
+        while True:
+            try:
+                delete_old_ids()
+                time.sleep(3600)  # every 10 minutes
+            except Exception as e:
+                logger.warning(f"[CLEANUP ERROR] {e}")
+                time.sleep(600)
+
+    threading.Thread(target=cleaner, daemon=True).start()
 
 
-        if choice_num == 4:  # Other
-            session["step"] = "other_donation_details"
-            whatsapp.send_message(
-                "✏️ *New Donation Purpose*\n"
-                "Describe what this donation is for:\n\n"
-                "_Example: \"Building Fund\" or \"Pastoral Support\"_\n"
-                "_Type *cancel* to go back_",
-                phone
-            )
+@latterpay.route("/")
+def home():
+    logger.info("Home endpoint accessed")
+    return "WhatsApp Donation Service is running"
+
+@latterpay.route("/payment-return")
+def payment_return():
+    return "<h2>Payment attempted. You may now return to WhatsApp.</h2>"
+
+@latterpay.route("/payment-result", methods=["POST"])
+def payment_result():
+    try:
+        raw_data = request.data.decode("utf-8")
+        logger.info("Paynow Result Received: \n" + raw_data)
+        return "OK"
+    except Exception as e:
+        logger.error(f"❌ Error handling Paynow result: {e}")
+        return "ERROR", 500
+
+@latterpay.route("/webhook", methods=["GET", "POST"])
+def webhook_debug():
+    try:
+        if request.method == "GET":
+            verify_token = request.args.get("hub.verify_token")
+            challenge = request.args.get("hub.challenge")
+            if verify_token == os.getenv("VERIFY_TOKEN"):
+                logger.info("Webhook verified successfully!")
+                return challenge, 200
+            return "Verification failed", 403
+
+        if request.method == "POST":
+            data = request.get_json(force=True, silent=True)
+            if not data:
+                logger.error("No valid JSON data received.")
+                return jsonify({"status": "error", "message": "No data"}), 400
+
+            entry = data.get("entry", [{}])[0]
+            changes = entry.get("changes", [{}])[0]
+            value = changes.get("value", {})
+            msg_data = value.get("messages", [{}])[0] if value.get("messages") else None
+
+            if not msg_data:
+                logger.info("No user message detected. Ignored.")
+                return "ok"
+
+            msg_id = msg_data.get("id")
+            msg_from = msg_data.get("from")
+
+            if is_echo_message(msg_id) or msg_data.get("echo" ) or  message_exists(msg_id) or msg_from in [
+                os.getenv("PHONE_NUMBER_ID"), os.getenv("WHATSAPP_BOT_NUMBER")
+            ]:
+                logger.info("Echo/self message ignored.")
+                save_sent_message_id(msg_id)
+                return "ok"
+
+
+
+
+
             
-        elif choice_num <= 3:  # Standard types
-            session["data"]["donation_type"] = donation_types[choice_num-1]
-            session["step"] = "region"
-            whatsapp.send_message(
-                "🌍 *Congregation Name*:\n"
-                "Please share your congregation\n\n"
-                "_Type *cancel* to exit_",
-                phone
-            )
-        else:  # Custom types (5+)
-            with open(CUSTOM_TYPES_FILE, 'r') as f:
-                custom_types = json.load(f)
-            custom_type = custom_types[choice_num-5]
-            session["data"]["donation_type"] = custom_type["description"]
-            session["step"] = "region"
-            whatsapp.send_message(
-                "🌍 *Congregation Name*:\n"
-                "Please share your congregation\n\n"
-                "_Type *cancel* to exit_",
-                phone
-            )
+            phone = whatsapp.get_mobile(data)
+            name = whatsapp.get_name(data)
+            msg = whatsapp.get_message(data).strip()
 
-    elif session["step"] == "region":
-        session["data"]["region"] = msg
-        session["step"] = "note"
-        whatsapp.send_message(
-            "📝 *Additional Notes*:\n"
-            "Any extra notes for the finance director?\n\n"
-            "_Type *cancel* to exit_",
-            phone
-        )
-        
+            logger.info(f"Valid message received from {phone}: {msg}")
 
-    elif session["step"] == "note":
-        session["data"]["note"] = msg
-        session["step"] = "done"
-        summary = session["data"]
+            if phone == os.getenv("ADMIN_PHONE"):
+                return AdminService.handle_admin_command(phone, msg) or jsonify({"status": "processed"}), 200
 
-        record_payment(summary)  # Record the payment
-        confirm_message = (
-            f"✅ *Thank you {summary['name']}!*\n\n"
-            f"💰 *Amount:* {summary['amount']}\n"
-            f"📌 *Type:* {summary['donation_type']}\n"
-            f"🌍 *Congregation:* {summary['region']}\n"
-            f"📝 *Note:* {summary['note']}\n\n"
-            "_We will now send a payment link and notify the finance director after payment is complete._"
-        )
-        
-        from services.setup import send_payment_report_to_finance   
-        send_payment_report_to_finance()
-        whatsapp.send_message(confirm_message, phone)
-        
+            # Try to load an existing session from the my database2112211
+            session = load_session(phone)
 
-        del sessions[phone]  # Clear the session
+            if not session:
+                initialize_session(phone, name)
+                return jsonify({"status": "session initialized"}), 200
+            
 
-    return "ok"
+            if check_session_timeout(phone):
+                return jsonify({"status": "session timeout"}), 200
+
+
+            if msg.lower() == "cancel":
+                cancel_session(phone)
+                return jsonify({"status": "session cancelled"}), 200
+
+            # Update last_active timestamp in the database
+            session["last_active"] = datetime.now()
+            save_session(phone, session["step"], session["data"])  
+
+            # Continue handling the message
+            return handle_user_message(phone, msg, session)
+
+
+    except Exception as e:
+        logger.error(f"Message processing error: {str(e)}", exc_info=True)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 
 if __name__ == "__main__":
-        # Clean up expired types on startup
-        cleanup_expired_donation_types()
-        setup_scheduled_reports()
-        app.run(port=5000, debug=True)
-        
+    init_db()
+    monitor_sessions()
+    port = int(os.environ.get("PORT", 8010))
+    logger.info(f"Starting server on port {port}")
+    latterpay.run(host="0.0.0.0", port=port)
