@@ -14,7 +14,6 @@ from services.pygwan_whatsapp import whatsapp
 from services.config import CUSTOM_TYPES_FILE, PAYMENTS_FILE
 from services.sessions import check_session_timeout, cancel_session, initialize_session,load_session,save_session
 from services.donationflow import handle_user_message
-from services.adminservice import AdminService
 from services.sessions import monitor_sessions
 
 
@@ -189,9 +188,6 @@ def webhook_debug():
             msg = whatsapp.get_message(data).strip()
 
             logger.info(f"Valid message received from {phone}: {msg}")
-
-            if phone == os.getenv("ADMIN_PHONE"):
-                return AdminService.handle_admin_command(phone, msg) or jsonify({"status": "processed"}), 200
 
             # Try to load an existing session from the my database2112211
             session = load_session(phone)
