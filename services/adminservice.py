@@ -9,29 +9,6 @@ from services.setup import send_payment_report_to_finance
 
 
 class AdminService:
-    @staticmethod
-    def handle_approval_command(admin_phone, msg):
-        """Process admin approval commands"""
-        if msg.lower() == "cancel":
-            return True
-        
-        try:
-            parts = msg.split()
-            if len(parts) < 3:
-                raise ValueError("Format: /approve [phone] [duration]")
-            
-            user_phone = parts[1]
-            duration = parts[2]
-            
-            return AdminService._process_approval(
-                admin_phone=admin_phone,
-                user_phone=user_phone,
-                duration=duration
-            )
-        except Exception as e:
-            config.whatsapp.send_message(f"❌ Error: {str(e)}", admin_phone)
-            return False
-    
 
     @staticmethod
     def notify_approval_request(user_phone, donation_description):
@@ -110,31 +87,3 @@ class AdminService:
             "✅ Approval processed successfully!",
             admin_phone
         )
-
-    @staticmethod
-    def handle_admin_command(phone,msg):
-            whatsapp.send_message("⚠️ *You're the admin, but continuing as a donor.*\n Type /admin to see admin commands.", phone)
-            whatsapp.send_message(
-                "👩🏾‍💼 *Admin Panel*\n\n"
-                "Use the following commands:\n"
-                "• /report pdf   (_View the payment report in pdf format_)\n"
-                "• /report excel  (_View the payment report in excel format__\n"
-                
-            )
-    
-
-            if msg == "/report pdf":
-                send_payment_report_to_finance("pdf")
-                whatsapp.send_message("✅ PDF report sent to finance.", phone)
-                return "ok"
-
-            elif msg == "/report excel":
-                send_payment_report_to_finance("excel")
-                whatsapp.send_message("✅ Excel report sent to finance.", phone)
-                return "ok"
-
-            elif msg.startswith("/approve") or msg.startswith("/session"):
-                AdminService.handle_approval_command(phone, msg)
-                return "ok"
-
-           

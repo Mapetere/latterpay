@@ -11,8 +11,19 @@ from services import config
 from services.config import donation_types as DONATION_TYPES
 from services.pygwan_whatsapp import whatsapp
 from services.getdonationmenu import get_donation_menu, validate_donation_choice
+from services.adminservice import handle_approval_command
 from services.sessions import delete_session, load_session,save_session
 from decimal import Decimal, InvalidOperation
+from services.sessions import (
+    load_session, initialize_session, save_session,
+     update_last_active
+)
+from services.config import admin_phone
+from services.adminservice import handle_approval_command
+from services.setup import send_payment_report_to_finance
+from services.pygwan_whatsapp import whatsapp
+from services.userstore import add_known_user, is_known_user
+
 import sys
 import logging
 
@@ -26,14 +37,30 @@ step_handlers = {}
 
 
 
+
+
+
+
 def handle_user_message(phone, msg, session):
+    
+    update_last_active(phone)
+    session = load_session(phone)
+    if phone == admin_phone:
+        return handle_admin_user(phone, msg, session)
+
+    
+    if not session:
+        return initialize_session(phone)
+
     step = session.get("step", "name")
     handler = step_handlers.get(step)
-    save_session(phone, session["step"], session["data"])
+    save_session(phone, step, session.get("data", {}))
+
     if handler:
         return handler(phone, msg, session)
     else:
         return handle_unknown_state(phone, msg, session)
+
     
 
 
@@ -45,6 +72,69 @@ def handle_unknown_state(phone, msg, session):
     save_session(phone, session["step"], session["data"])
 
     return handle_name_step(phone, msg, session)
+
+
+
+def handle_admin_user(phone, msg, session):
+    known = is_known_user(phone)
+    is_command = msg.startswith("/")
+
+    if is_command:
+        return handle_admin_command(phone, msg)
+
+   
+    if not known:
+        whatsapp.send_message(" *Hello Admin!* You’re registered as an admin, but continuing as a donor.", phone)
+        add_known_user(phone)
+        return initialize_session(phone)
+
+   
+    if not session:
+        whatsapp.send_message("👋🏽 Welcome back, *Admin*! Let’s continue your donation journey.", phone)
+        return initialize_session(phone)
+
+    
+    step = session.get("step", "name")
+    handler = step_handlers.get(step)
+    save_session(phone, step, session.get("data", {}))
+    if handler:
+        return handler(phone, msg, session)
+    else:
+        return handle_unknown_state(phone, msg, session)
+
+
+
+def handle_admin_command(phone, msg):
+    if msg == "/admin":
+        whatsapp.send_message(
+            "👩🏾‍💼 *Admin Panel*\n\n"
+            "Use the following commands:\n"
+            "• /report pdf   (_Download payment report in PDF_)\n"
+            "• /report excel (_Download payment report in Excel_)\n"
+            "• /approve [txn_id]\n"
+            "• /session [user_phone]",
+            phone
+        )
+        return "ok"
+
+    elif msg == "/report pdf":
+        send_payment_report_to_finance("pdf")
+        whatsapp.send_message("✅ PDF report sent to finance.", phone)
+        return "ok"
+
+    elif msg == "/report excel":
+        send_payment_report_to_finance("excel")
+        whatsapp.send_message("✅ Excel report sent to finance.", phone)
+        return "ok"
+
+    elif msg.startswith("/approve") or msg.startswith("/session"):
+        handle_approval_command(phone, msg)
+        return "ok"
+
+    else:
+        whatsapp.send_message("❌ Unknown command. Type `/admin` to see available commands.", phone)
+        return "ok"
+
 
 
 
