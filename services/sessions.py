@@ -218,3 +218,40 @@ def save_session(phone, step, data):
 
 
 
+def get_user_step(phone):
+    conn = sqlite3.connect("botdata.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT step FROM sessions WHERE phone = ?", (phone,))
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else None
+
+
+def update_user_step(phone, step):
+    conn = sqlite3.connect("botdata.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO sessions (phone, step, last_active)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(phone) DO UPDATE SET step=excluded.step, last_active=CURRENT_TIMESTAMP
+    """, (phone, step))
+    conn.commit()
+    conn.close()
+
+
+import json
+
+
+def update_session_data(phone, key, value):
+    conn = sqlite3.connect("botdata.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT data FROM sessions WHERE phone = ?", (phone,))
+    result = cursor.fetchone()
+    existing_data = json.loads(result[0]) if result and result[0] else {}
+
+    existing_data[key] = value
+    updated_data = json.dumps(existing_data)
+
+    cursor.execute("UPDATE sessions SET data = ?, last_active = CURRENT_TIMESTAMP WHERE phone = ?", (updated_data, phone))
+    conn.commit()
+    conn.close()
