@@ -139,13 +139,25 @@ def webhook():
                 response["metadata"]["decryption_status"] = "complete" if decrypted_bytes else "partial"
 
                 try:
+                    # 1. Try UTF-8 → JSON
                     decrypted_text = decrypted_bytes.decode("utf-8")
-                    parsed_json = json.loads(decrypted_text)
-                    response["data"] = parsed_json
-                except (UnicodeDecodeError, json.JSONDecodeError):
-                    base64_output = base64.b64encode(decrypted_bytes).decode("utf-8")
-                    response["message"] = "Decrypted content is not valid JSON, returning base64 string"
-                    response["metadata"]["base64_encoded"] = base64_output
+                    try:
+                        response["data"] = json.loads(decrypted_text)
+                        response["message"] = "Decrypted JSON successfully"
+                    except json.JSONDecodeError:
+                        # 2. Try base64 decode → UTF-8 → JSON
+                        try:
+                            base64_decoded = base64.b64decode(decrypted_text)
+                            response["data"] = json.loads(base64_decoded.decode("utf-8"))
+                            response["message"] = "Decrypted base64-encoded JSON"
+                        except Exception as e:
+                            logger.warning(f"Base64-decoded JSON fallback failed: {e}")
+                            # 3. Fall back to base64 string
+                            response["metadata"]["base64_encoded"] = base64.b64encode(decrypted_bytes).decode("utf-8")
+                            response["message"] = "Decrypted content is not JSON. Returning base64."
+                except UnicodeDecodeError:
+                    response["metadata"]["base64_encoded"] = base64.b64encode(decrypted_bytes).decode("utf-8")
+                    response["message"] = "Decrypted binary content. Returned base64."
 
             except Exception as e:
                 logger.error(f"Decryption or parsing error: {e}")
