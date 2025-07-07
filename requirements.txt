@@ -8,3 +8,4 @@ python-dotenv
 apscheduler
 paynow
 pycryptodome
+cryptography>=41.0.0
