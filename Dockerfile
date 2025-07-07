@@ -7,6 +7,8 @@ WORKDIR /app
 # Copy requirements file and install dependencies
 
 COPY requirements.txt .
+COPY private.pem /app/private.pem
+
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends gcc && \
 	pip install --no-cache-dir -r requirements.txt && \
 	apt-get purge -y --auto-remove gcc && \

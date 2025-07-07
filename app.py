@@ -18,7 +18,12 @@ from services.sessions import monitor_sessions
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
 from Crypto.Util.Padding import pad
+import os
+
 from Crypto.Cipher import AES, PKCS1_OAEP
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization, hashes, padding
 from Crypto.PublicKey import RSA
 import base64
 
@@ -31,11 +36,17 @@ def decrypt_payload(encrypted_payload_base64, aes_key, iv):
     decrypted_data = unpad(cipher_aes.decrypt(encrypted_payload), AES.block_size)
     return decrypted_data.decode("utf-8")
 
-def decrypt_aes_key(encrypted_key_b64, private_key_path, passphrase):
-    with open(private_key_path, "rb") as key_file:
-        private_key = RSA.import_key(key_file.read(), passphrase=passphrase)
-        cipher_rsa = PKCS1_OAEP.new(private_key)
-        return cipher_rsa.decrypt(base64.b64decode(encrypted_key_b64))
+def decrypt_aes_key(encrypted_key_base64, private_key_path, passphrase):
+    encrypted_key = base64.b64decode(encrypted_key_base64)
+    private_key = load_encrypted_private_key(private_key_path, passphrase)
+    return private_key.decrypt(
+        encrypted_key,
+        padding=padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
 
 def decrypt_flow_data(encrypted_data_b64, aes_key, iv_b64):
     iv = base64.b64decode(iv_b64)
@@ -58,6 +69,16 @@ def encrypt_with_aes_key(aes_key, plaintext_json_str):
     padded = pad(plaintext_json_str.encode("utf-8"), AES.block_size)
     encrypted = cipher.encrypt(padded)
     return base64.b64encode(iv + encrypted).decode("utf-8")
+
+
+def load_encrypted_private_key(file_path="private.pem", passphrase=None):
+    with open(file_path, "rb") as key_file:
+        private_key = serialization.load_pem_private_key(
+            key_file.read(),
+            password=passphrase.encode() if passphrase else None,
+            backend=default_backend()
+        )
+    return private_key
 
 
 logging.basicConfig(
@@ -238,6 +259,9 @@ def webhook_debug():
         if enc_key and enc_data and iv:
             aes_key = decrypt_aes_key(enc_key, "private.pem", os.getenv("PRIVATE_KEY_PASSPHRASE"))
             decrypted_json = decrypt_flow_data(enc_data, aes_key, iv)
+            logger.info(f"AES key length: {len(aes_key)}")
+            logger.info(f"IV length: {len(iv)}")
+            logger.info(f"Encrypted flow data length: {len(enc_data)}")
 
             logger.info(f"Decrypted flow data: {decrypted_json}")
             parsed = json.loads(decrypted_json)
