@@ -36,17 +36,29 @@ def decrypt_payload(encrypted_payload_base64, aes_key, iv):
     decrypted_data = unpad(cipher_aes.decrypt(encrypted_payload), AES.block_size)
     return decrypted_data.decode("utf-8")
 
-def decrypt_aes_key(encrypted_key_base64, private_key_path, passphrase):
-    encrypted_key = base64.b64decode(encrypted_key_base64)
-    private_key = load_encrypted_private_key(private_key_path, passphrase)
-    return private_key.decrypt(
+
+def decrypt_aes_key(encrypted_key_b64, private_key_path, passphrase=None):
+    from cryptography.hazmat.primitives.asymmetric import padding
+    encrypted_key = base64.b64decode(encrypted_key_b64)
+
+    with open(private_key_path, "rb") as key_file:
+        private_key = serialization.load_pem_private_key(
+            key_file.read(),
+            password=passphrase.encode() if passphrase else None,
+        )
+
+    aes_key = private_key.decrypt(
         encrypted_key,
-        padding=padding.OAEP(
+        padding.OAEP(
             mgf=padding.MGF1(algorithm=hashes.SHA256()),
             algorithm=hashes.SHA256(),
             label=None
         )
     )
+    return aes_key
+
+
+        
 
 def decrypt_flow_data(encrypted_data_b64, aes_key, iv_b64):
     iv = base64.b64decode(iv_b64)
