@@ -38,8 +38,6 @@ step_handlers = {}
 
 
 
-
-
 def handle_user_message(phone, msg, session):
     
     update_last_active(phone)
@@ -55,6 +53,8 @@ def handle_user_message(phone, msg, session):
     handler = step_handlers.get(step)
     save_session(phone, step, session.get("data", {}))
 
+
+   
     if handler:
         return handler(phone, msg, session)
     else:
