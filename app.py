@@ -3,38 +3,43 @@ import json
 import base64
 import logging
 from flask import Flask, request, jsonify
-from Crypto.Cipher import AES as CryptoAES
+from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.backends import default_backend
 from dotenv import load_dotenv
 
-# Initialize Flask app
+# ---------------------- App Setup ---------------------- #
 app = Flask(__name__)
+load_dotenv()
 
-# Configure logging
+# ---------------------- Logging ------------------------ #
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('whatsapp_webhook.log')
-    ]
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(), logging.FileHandler("whatsapp_webhook.log")]
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables
-load_dotenv()
-PRIVATE_KEY_FILE = os.getenv('PRIVATE_KEY_FILE', 'private.pem')
-PRIVATE_KEY_PASSPHRASE = os.getenv('PRIVATE_KEY_PASSPHRASE')
+# ---------------------- Config ------------------------- #
+PRIVATE_KEY_FILE = os.getenv("PRIVATE_KEY_FILE", "private.pem")
+PRIVATE_KEY_PASSPHRASE = os.getenv("PRIVATE_KEY_PASSPHRASE")
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
+PORT = int(os.getenv("PORT", 8010))
 
+# ---------------------- Validation --------------------- #
+if not VERIFY_TOKEN:
+    logger.error("Missing VERIFY_TOKEN environment variable.")
+if not os.path.exists(PRIVATE_KEY_FILE):
+    logger.error(f"Private key file not found: {PRIVATE_KEY_FILE}")
+
+# ---------------------- Decryption Handler ---------------------- #
 class WhatsAppDecryptor:
-    """Handles all WhatsApp decryption operations with maximum compatibility"""
-    
+
     @staticmethod
     def decrypt_aes_key(encrypted_key_b64: str) -> bytes:
-        """Decrypt the AES key using RSA private key"""
+        """Decrypt base64 AES key using RSA private key."""
         try:
             encrypted_key = base64.b64decode(encrypted_key_b64)
             with open(PRIVATE_KEY_FILE, "rb") as key_file:
@@ -52,111 +57,98 @@ class WhatsAppDecryptor:
                 )
             )
         except Exception as e:
-            logger.error(f"AES key decryption failed: {str(e)}")
-            raise ValueError("Failed to decrypt AES key")
+            logger.error(f"Failed to decrypt AES key: {e}")
+            raise
 
-   
     @staticmethod
-    def force_decrypt(encrypted_data: bytes, aes_key: bytes, iv: bytes) -> str:
-        """Ultra-permissive decryption that always returns something"""
+    def force_decrypt(encrypted_data: bytes, aes_key: bytes, iv: bytes) -> bytes:
+        """Decrypt AES-CBC data, truncate if needed."""
         try:
-            # If the encrypted data is not a multiple of 16, truncate or pad
-            remainder = len(encrypted_data) % CryptoAES.block_size
-            if remainder != 0:
-                logger.warning(f"Encrypted data length {len(encrypted_data)} is not a multiple of 16. Fixing...")
-                encrypted_data = encrypted_data[:len(encrypted_data) - remainder]
+            if len(encrypted_data) % AES.block_size != 0:
+                logger.warning(f"Encrypted data length {len(encrypted_data)} is not a multiple of 16. Truncating...")
+                encrypted_data = encrypted_data[:len(encrypted_data) - (len(encrypted_data) % AES.block_size)]
 
-            cipher = CryptoAES.new(aes_key, CryptoAES.MODE_CBC, iv)
+            cipher = AES.new(aes_key, AES.MODE_CBC, iv)
             decrypted = cipher.decrypt(encrypted_data)
-
             try:
-                return unpad(decrypted, CryptoAES.block_size).decode('utf-8')
+                return unpad(decrypted, AES.block_size)
             except ValueError:
-                return decrypted.decode('utf-8', errors='replace').strip()
-
+                logger.warning("Unpadding failed, returning raw decrypted data.")
+                return decrypted
         except Exception as e:
-            logger.error(f"Critical decryption failure: {str(e)}")
-            return ""
-
+            logger.error(f"Decryption error: {e}")
+            return b""
 
     @staticmethod
-    def decrypt_flow_data(encrypted_data_b64: str, aes_key: bytes, iv_b64: str) -> str:
-        """Main decryption method that cannot fail"""
+    def decrypt_flow_data(encrypted_data_b64: str, aes_key: bytes, iv_b64: str) -> bytes:
+        """Decrypt base64 flow data."""
         try:
-            # Clean and decode inputs
             encrypted_data = base64.b64decode(encrypted_data_b64.strip())
             iv = base64.b64decode(iv_b64.strip())
 
-            # Validate lengths
             if len(aes_key) not in [16, 24, 32]:
-                logger.warning(f"Unexpected AES key length: {len(aes_key)} bytes")
+                logger.warning(f"AES key length {len(aes_key)} is invalid.")
             if len(iv) != 16:
-                logger.warning(f"Unexpected IV length: {len(iv)} bytes")
+                logger.warning(f"IV length {len(iv)} is invalid.")
 
             return WhatsAppDecryptor.force_decrypt(encrypted_data, aes_key, iv)
 
         except Exception as e:
-            logger.error(f"Decryption preprocessing failed: {str(e)}")
-            return ""
+            logger.error(f"Pre-decryption error: {e}")
+            return b""
 
-@app.route('/webhook', methods=['GET', 'POST'])
+
+# ---------------------- Webhook Route ---------------------- #
+@app.route("/webhook", methods=["GET", "POST"])
 def webhook():
-    """Main webhook endpoint that never fails"""
     try:
-        if request.method == 'GET':
-            # Verification handshake
-            verify_token = request.args.get('hub.verify_token')
-            if verify_token == os.getenv('VERIFY_TOKEN'):
-                return request.args.get('hub.challenge'), 200
+        if request.method == "GET":
+            token = request.args.get("hub.verify_token")
+            if token == VERIFY_TOKEN:
+                return request.args.get("hub.challenge", ""), 200
             return "Verification failed", 403
 
-        # Initialize response template
         response = {
             "status": "success",
             "message": "Message processed",
             "metadata": {}
         }
 
-        # Handle all POST content types
-        content_type = request.content_type or ''
-        raw_data = request.data
-        
-        # Try to parse JSON from any content type
+        # Parse incoming data
         try:
-            if content_type.lower() == 'application/x-www-form-urlencoded':
-                data = dict(request.form)
-                if 'payload' in data:
-                    try:
-                        data = json.loads(data['payload'])
-                    except json.JSONDecodeError:
-                        pass
+            content_type = (request.content_type or "").lower()
+            if "x-www-form-urlencoded" in content_type:
+                form_data = dict(request.form)
+                data = json.loads(form_data.get("payload", "{}"))
             else:
                 data = request.get_json(force=True, silent=True) or {}
         except Exception as e:
-            logger.warning(f"Content parsing warning: {str(e)}")
+            logger.warning(f"Request parsing error: {e}")
             data = {}
 
-        # Handle encrypted flow data
-        if all(key in data for key in ['encrypted_aes_key', 'encrypted_flow_data', 'initial_vector']):
+        # Handle encrypted fields
+        if all(k in data for k in ["encrypted_aes_key", "encrypted_flow_data", "initial_vector"]):
             try:
-                aes_key = WhatsAppDecryptor.decrypt_aes_key(data['encrypted_aes_key'])
-                decrypted = WhatsAppDecryptor.decrypt_flow_data(
-                    data['encrypted_flow_data'],
+                aes_key = WhatsAppDecryptor.decrypt_aes_key(data["encrypted_aes_key"])
+                decrypted_bytes = WhatsAppDecryptor.decrypt_flow_data(
+                    data["encrypted_flow_data"],
                     aes_key,
-                    data['initial_vector']
+                    data["initial_vector"]
                 )
-                
-                response['metadata']['decryption_status'] = 'complete' if decrypted else 'partial'
-                
+
+                response["metadata"]["decryption_status"] = "complete" if decrypted_bytes else "partial"
+
                 try:
-                    flow_data = json.loads(decrypted)
-                    response['data'] = flow_data
-                except json.JSONDecodeError:
-                    response['metadata']['raw_data'] = decrypted[:500] + "..." if len(decrypted) > 500 else decrypted
-                    response['message'] = "Decrypted content is not valid JSON"
-                
+                    decrypted_text = decrypted_bytes.decode("utf-8")
+                    parsed_json = json.loads(decrypted_text)
+                    response["data"] = parsed_json
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    base64_output = base64.b64encode(decrypted_bytes).decode("utf-8")
+                    response["message"] = "Decrypted content is not valid JSON, returning base64 string"
+                    response["metadata"]["base64_encoded"] = base64_output
+
             except Exception as e:
-                logger.error(f"Flow processing error: {str(e)}")
+                logger.error(f"Decryption or parsing error: {e}")
                 response.update({
                     "status": "received",
                     "message": "Processing attempted",
@@ -169,23 +161,14 @@ def webhook():
         return jsonify(response), 200
 
     except Exception as e:
-        logger.error(f"Critical webhook error: {str(e)}")
+        logger.error(f"Critical error in webhook: {e}")
         return jsonify({
             "status": "received",
             "message": "Message received"
         }), 200
 
-if __name__ == '__main__':
-    # Validate configuration
-    required_vars = ['VERIFY_TOKEN']
-    missing_vars = [var for var in required_vars if not os.getenv(var)]
-    if missing_vars:
-        logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
-    
-    if not os.path.exists(PRIVATE_KEY_FILE):
-        logger.error(f"Private key file not found at {PRIVATE_KEY_FILE}")
 
-    # Start the server
-    port = int(os.getenv('PORT', 8010))
-    logger.info(f"Starting WhatsApp webhook service on port {port}")
-    app.run(host='0.0.0.0', port=port)
+# ---------------------- App Entry ---------------------- #
+if __name__ == "__main__":
+    logger.info(f"🚀 Starting WhatsApp webhook service on port {PORT}")
+    app.run(host="0.0.0.0", port=PORT)
