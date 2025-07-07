@@ -68,6 +68,21 @@ logging.basicConfig(
         logging.FileHandler('app.log')
     ]
 )
+
+
+PRIVATE_KEY_FILE = "private.pem"
+
+if not os.path.exists(PRIVATE_KEY_FILE):
+    pem_content = os.getenv("PRIVATE_KEY_PEM")
+    if pem_content:
+        with open(PRIVATE_KEY_FILE, "w") as pem_file:
+            pem_file.write(pem_content)
+        print(" private.pem file created from environment variable.")
+    else:
+        print(" PRIVATE_KEY_PEM environment variable not set!")
+
+
+
 logger = logging.getLogger(__name__)
 
 
