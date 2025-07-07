@@ -35,8 +35,16 @@ def decrypt_aes_key(encrypted_key_b64, private_key_path, passphrase):
     with open(private_key_path, "rb") as key_file:
         private_key = RSA.import_key(key_file.read(), passphrase=passphrase)
         cipher_rsa = PKCS1_OAEP.new(private_key)
-        decrypted_key = cipher_rsa.decrypt(base64.b64decode(encrypted_key_b64))
-        return decrypted_key
+        return cipher_rsa.decrypt(base64.b64decode(encrypted_key_b64))
+
+def decrypt_flow_data(encrypted_data_b64, aes_key, iv_b64):
+    iv = base64.b64decode(iv_b64)
+    cipher = AES.new(aes_key, AES.MODE_CBC, iv)
+    encrypted_data = base64.b64decode(encrypted_data_b64)
+    decrypted_padded = cipher.decrypt(encrypted_data)
+    decrypted = unpad(decrypted_padded, AES.block_size)
+    return decrypted.decode("utf-8")
+
 
 def re_encrypt_payload(plaintext, aes_key, iv):
     cipher_aes = AES.new(aes_key, AES.MODE_CBC, iv)
@@ -192,6 +200,7 @@ def payment_result():
 def webhook_debug():
     try:
         if request.method == "GET":
+            # Webhook verification
             verify_token = request.args.get("hub.verify_token")
             challenge = request.args.get("hub.challenge")
             if verify_token == os.getenv("VERIFY_TOKEN"):
@@ -199,93 +208,79 @@ def webhook_debug():
                 return challenge, 200
             return "Verification failed", 403
 
-        if request.method == "POST":
-            data = request.get_json(force=True, silent=True)
-            if not data:
-                logger.error("No valid JSON data received.")
-                return jsonify({"status": "error", "message": "No data"}), 400
-            
-            encrypted_aes_key = request.headers.get("X-Hub-Signature-Encrypted-AES-Key")
-            encrypted_payload = request.get_data()  
+        # POST: main webhook logic
+        data = request.get_json(force=True, silent=True)
 
-            if encrypted_aes_key:
-                aes_key = decrypt_aes_key(
-                    encrypted_aes_key,
-                    "private.pem",
-                    os.getenv("PRIVATE_KEY_PASSPHRASE")
-                )
+        if not data:
+            logger.error("No valid JSON data received.")
+            return jsonify({"status": "error", "message": "No data"}), 400
 
-                # Just echo back a test string encrypted with the AES key
-                echo_back = encrypt_with_aes_key(aes_key, '{"success":true}')
-                
-                return echo_back, 200
-                        
+        # Check for WhatsApp Flow encryption
+        enc_key = data.get("encrypted_aes_key")
+        enc_data = data.get("encrypted_flow_data")
+        iv = data.get("initial_vector")
 
-            if all(k in data for k in ("encrypted_key", "iv", "encrypted_payload")):
-                try:
-                    aes_key = decrypt_aes_key(data["encrypted_key"])
-                    iv = base64.b64decode(data["iv"])
-                    decrypted = decrypt_payload(data["encrypted_payload"], aes_key, iv)
-                    re_encrypted = re_encrypt_payload(decrypted, aes_key, iv)
-                    return jsonify({"encrypted_payload": re_encrypted}), 200
-                except Exception as e:
-                    logger.error(f"Decryption error: {str(e)}", exc_info=True)
-                    return jsonify({"status": "error", "message": "decryption failed"}), 500
+        if enc_key and enc_data and iv:
+            aes_key = decrypt_aes_key(enc_key, "private.pem", os.getenv("PRIVATE_KEY_PASSPHRASE"))
+            decrypted_json = decrypt_flow_data(enc_data, aes_key, iv)
 
+            logger.info(f"Decrypted flow data: {decrypted_json}")
+            parsed = json.loads(decrypted_json)
+            action = parsed.get("action")
 
-            entry = data.get("entry", [{}])[0]
-            changes = entry.get("changes", [{}])[0]
-            value = changes.get("value", {})
-            msg_data = value.get("messages", [{}])[0] if value.get("messages") else None
+            if action == "INIT":
+                return jsonify({"status": "Flow initialized"}), 200
+            elif action == "BACK":
+                return jsonify({"status": "User pressed back"}), 200
+            elif action == "data_exchange":
+                logger.info(f"User data: {parsed.get('data')}")
+                return jsonify({"status": "Data exchanged"}), 200
 
-            if not msg_data:
-                logger.info("No user message detected. Ignored.")
-                return "ok"
+            return jsonify({"status": "Flow handled but action unknown"}), 200
 
-            msg_id = msg_data.get("id")
-            msg_from = msg_data.get("from")
+        # Regular message handling
+        entry = data.get("entry", [{}])[0]
+        changes = entry.get("changes", [{}])[0]
+        value = changes.get("value", {})
+        msg_data = value.get("messages", [{}])[0] if value.get("messages") else None
 
-            if is_echo_message(msg_id) or msg_data.get("echo" ) or  message_exists(msg_id) or msg_from in [
-                os.getenv("PHONE_NUMBER_ID"), os.getenv("WHATSAPP_BOT_NUMBER")
-            ]:
-                logger.info("Echo/self message ignored.")
-                save_sent_message_id(msg_id)
-                return "ok"
+        if not msg_data:
+            logger.info("No user message detected. Ignored.")
+            return "ok"
 
+        msg_id = msg_data.get("id")
+        msg_from = msg_data.get("from")
 
+        if is_echo_message(msg_id) or msg_data.get("echo") or message_exists(msg_id) or msg_from in [
+            os.getenv("PHONE_NUMBER_ID"), os.getenv("WHATSAPP_BOT_NUMBER")
+        ]:
+            logger.info("Echo/self message ignored.")
+            save_sent_message_id(msg_id)
+            return "ok"
 
+        phone = whatsapp.get_mobile(data)
+        name = whatsapp.get_name(data)
+        msg = whatsapp.get_message(data).strip()
 
+        logger.info(f"Valid message received from {phone}: {msg}")
 
-            
-            phone = whatsapp.get_mobile(data)
-            name = whatsapp.get_name(data)
-            msg = whatsapp.get_message(data).strip()
+        session = load_session(phone)
 
-            logger.info(f"Valid message received from {phone}: {msg}")
+        if not session:
+            initialize_session(phone, name)
+            return jsonify({"status": "session initialized"}), 200
 
-            # Try to load an existing session from the my database2112211
-            session = load_session(phone)
+        if check_session_timeout(phone):
+            return jsonify({"status": "session timeout"}), 200
 
-            if not session:
-                initialize_session(phone, name)
-                return jsonify({"status": "session initialized"}), 200
-            
+        if msg.lower() == "cancel":
+            cancel_session(phone)
+            return jsonify({"status": "session cancelled"}), 200
 
-            if check_session_timeout(phone):
-                return jsonify({"status": "session timeout"}), 200
+        session["last_active"] = datetime.now()
+        save_session(phone, session["step"], session["data"])
 
-
-            if msg.lower() == "cancel":
-                cancel_session(phone)
-                return jsonify({"status": "session cancelled"}), 200
-
-            # Update last_active timestamp in the database
-            session["last_active"] = datetime.now()
-            save_session(phone, session["step"], session["data"])  
-
-            # Continue handling the message
-            return handle_user_message(phone, msg, session)
-
+        return handle_user_message(phone, msg, session)
 
     except Exception as e:
         logger.error(f"Message processing error: {str(e)}", exc_info=True)
