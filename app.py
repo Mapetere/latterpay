@@ -55,25 +55,29 @@ class WhatsAppDecryptor:
             logger.error(f"AES key decryption failed: {str(e)}")
             raise ValueError("Failed to decrypt AES key")
 
+   
     @staticmethod
     def force_decrypt(encrypted_data: bytes, aes_key: bytes, iv: bytes) -> str:
         """Ultra-permissive decryption that always returns something"""
         try:
-            # First try standard CBC decryption
+            # If the encrypted data is not a multiple of 16, truncate or pad
+            remainder = len(encrypted_data) % CryptoAES.block_size
+            if remainder != 0:
+                logger.warning(f"Encrypted data length {len(encrypted_data)} is not a multiple of 16. Fixing...")
+                encrypted_data = encrypted_data[:len(encrypted_data) - remainder]
+
             cipher = CryptoAES.new(aes_key, CryptoAES.MODE_CBC, iv)
             decrypted = cipher.decrypt(encrypted_data)
-            
-            # Try to remove padding if present
+
             try:
                 return unpad(decrypted, CryptoAES.block_size).decode('utf-8')
             except ValueError:
-                # If padding removal fails, try to decode anyway
                 return decrypted.decode('utf-8', errors='replace').strip()
-                
+
         except Exception as e:
             logger.error(f"Critical decryption failure: {str(e)}")
-            # Return empty string if all decryption attempts fail
             return ""
+
 
     @staticmethod
     def decrypt_flow_data(encrypted_data_b64: str, aes_key: bytes, iv_b64: str) -> str:
