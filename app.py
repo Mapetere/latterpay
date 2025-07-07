@@ -30,7 +30,7 @@ PRIVATE_KEY_FILE = os.getenv('PRIVATE_KEY_FILE', 'private.pem')
 PRIVATE_KEY_PASSPHRASE = os.getenv('PRIVATE_KEY_PASSPHRASE')
 
 class WhatsAppDecryptor:
-    """Handles WhatsApp message decryption with robust error handling"""
+    """Handles all WhatsApp decryption operations with robust error recovery"""
     
     @staticmethod
     def decrypt_aes_key(encrypted_key_b64: str) -> bytes:
@@ -53,11 +53,43 @@ class WhatsAppDecryptor:
             )
         except Exception as e:
             logger.error(f"AES key decryption failed: {str(e)}")
-            raise
+            raise ValueError("Failed to decrypt AES key")
+
+    @staticmethod
+    def decrypt_with_fallback(encrypted_data: bytes, aes_key: bytes, iv: bytes) -> str:
+        """Attempt multiple decryption approaches"""
+        # Try standard decryption first
+        try:
+            cipher = CryptoAES.new(aes_key, CryptoAES.MODE_CBC, iv)
+            decrypted = unpad(cipher.decrypt(encrypted_data), CryptoAES.block_size)
+            return decrypted.decode('utf-8')
+        except ValueError as e:
+            logger.warning(f"Standard decryption failed: {str(e)}")
+        
+        # Try manual padding correction
+        try:
+            # Calculate required padding
+            pad_len = 16 - (len(encrypted_data) % 16)
+            padded_data = encrypted_data + bytes([pad_len] * pad_len)
+            
+            cipher = CryptoAES.new(aes_key, CryptoAES.MODE_CBC, iv)
+            decrypted = unpad(cipher.decrypt(padded_data), CryptoAES.block_size)
+            return decrypted.decode('utf-8')
+        except Exception as e:
+            logger.warning(f"Padded decryption failed: {str(e)}")
+        
+        # Final fallback - raw decryption without padding
+        try:
+            cipher = CryptoAES.new(aes_key, CryptoAES.MODE_CBC, iv)
+            decrypted = cipher.decrypt(encrypted_data)
+            return decrypted.decode('utf-8').strip()
+        except Exception as e:
+            logger.error(f"Raw decryption failed: {str(e)}")
+            raise ValueError("All decryption attempts failed")
 
     @staticmethod
     def decrypt_flow_data(encrypted_data_b64: str, aes_key: bytes, iv_b64: str) -> str:
-        """Decrypt WhatsApp flow data with padding handling"""
+        """Main decryption method with comprehensive error handling"""
         try:
             # Clean and decode inputs
             encrypted_data = base64.b64decode(encrypted_data_b64.strip())
@@ -69,24 +101,15 @@ class WhatsAppDecryptor:
             if len(iv) != 16:
                 raise ValueError(f"Invalid IV length: {len(iv)} bytes")
 
-            # Handle decryption with padding recovery
-            cipher = CryptoAES.new(aes_key, CryptoAES.MODE_CBC, iv)
-            decrypted = cipher.decrypt(encrypted_data)
-            
-            try:
-                return unpad(decrypted, CryptoAES.block_size).decode('utf-8')
-            except ValueError as e:
-                # If padding fails, try to process without unpadding
-                logger.warning(f"Padding error, attempting raw decryption: {str(e)}")
-                return decrypted.decode('utf-8').strip()
+            return WhatsAppDecryptor.decrypt_with_fallback(encrypted_data, aes_key, iv)
 
         except Exception as e:
             logger.error(f"Decryption failed | Key: {aes_key.hex()[:6]}... | IV: {iv_b64[:10]}... | Data: {encrypted_data_b64[:20]}...")
             raise
 
 @app.route('/webhook', methods=['GET', 'POST'])
-def webhook_handler():
-    """Main WhatsApp webhook endpoint with proper HTTP responses"""
+def webhook():
+    """Main webhook endpoint with WhatsApp compliance"""
     try:
         if request.method == 'GET':
             # Verification handshake
@@ -95,18 +118,29 @@ def webhook_handler():
                 return request.args.get('hub.challenge'), 200
             return "Verification failed", 403
 
-        # Ensure proper Content-Type
-        if request.content_type != 'application/json':
-            logger.error(f"Invalid Content-Type: {request.content_type}")
-            return jsonify({"status": "error", "message": "Content-Type must be application/json"}), 415
-
+        # Handle POST requests
+        content_type = request.content_type or ''
+        
+        # WhatsApp sometimes sends different content types, so we're more permissive
+        if 'application/json' not in content_type.lower():
+            logger.warning(f"Unexpected Content-Type: {content_type}. Attempting to process anyway.")
+            
         try:
-            data = request.get_json()
+            data = request.get_json(force=True, silent=True)
             if not data:
-                return jsonify({"status": "error", "message": "Empty request body"}), 400
+                # Try to parse body directly if get_json fails
+                raw_data = request.data.decode('utf-8')
+                try:
+                    data = json.loads(raw_data)
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse request body: {raw_data[:200]}...")
+                    return jsonify({"status": "error", "message": "Invalid JSON"}), 400
         except Exception as e:
-            logger.error(f"JSON parsing failed: {str(e)}")
-            return jsonify({"status": "error", "message": "Invalid JSON"}), 400
+            logger.error(f"Request parsing failed: {str(e)}")
+            return jsonify({"status": "error", "message": "Invalid request"}), 400
+
+        # Always return 200 for WhatsApp flow data, even if processing fails
+        response_template = {"status": "success", "message": "Message received"}
 
         # Handle encrypted flow data
         if all(key in data for key in ['encrypted_aes_key', 'encrypted_flow_data', 'initial_vector']):
@@ -118,22 +152,31 @@ def webhook_handler():
                     data['initial_vector']
                 )
                 
-                # Always return 200 even if decrypted content has issues
                 try:
                     flow_data = json.loads(decrypted)
-                    logger.info(f"Decrypted flow data: {json.dumps(flow_data, indent=2)}")
-                    return jsonify({"status": "success", "data": flow_data}), 200
+                    response_template.update({
+                        "data": flow_data,
+                        "decryption_status": "success"
+                    })
                 except json.JSONDecodeError:
-                    logger.warning(f"Decrypted content is not JSON: {decrypted[:200]}...")
-                    return jsonify({"status": "success", "raw_data": decrypted[:200]}), 200
-
+                    response_template.update({
+                        "raw_data": decrypted[:200] + "..." if len(decrypted) > 200 else decrypted,
+                        "decryption_status": "partial",
+                        "message": "Decrypted content is not valid JSON"
+                    })
+                
             except Exception as e:
                 logger.error(f"Flow processing error: {str(e)}")
-                # Return 200 to acknowledge receipt even if processing fails
-                return jsonify({"status": "received", "message": "Processing attempted"}), 200
+                response_template.update({
+                    "status": "received",
+                    "decryption_status": "failed",
+                    "message": str(e)
+                })
+
+            return jsonify(response_template), 200
 
         # Handle regular messages
-        return jsonify({"status": "success", "message": "Regular message received"}), 200
+        return jsonify(response_template), 200
 
     except Exception as e:
         logger.error(f"Webhook processing failed: {str(e)}", exc_info=True)
