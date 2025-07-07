@@ -156,8 +156,9 @@ def webhook():
                             response["metadata"]["base64_encoded"] = base64.b64encode(decrypted_bytes).decode("utf-8")
                             response["message"] = "Decrypted content is not JSON. Returning base64."
                 except UnicodeDecodeError:
-                    response["metadata"]["base64_encoded"] = base64.b64encode(decrypted_bytes).decode("utf-8")
-                    response["message"] = "Decrypted binary content. Returned base64."
+                    base64_encoded = base64.b64encode(decrypted_bytes).decode("utf-8")
+                    return base64_encoded, 200, {'Content-Type': 'text/plain'}
+
 
             except Exception as e:
                 logger.error(f"Decryption or parsing error: {e}")
