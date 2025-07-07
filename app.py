@@ -17,10 +17,10 @@ from services.donationflow import handle_user_message
 from services.sessions import monitor_sessions
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad,pad
-import os
-from cryptography.hazmat.primitives import serialization
+from Crypto.Cipher import AES as CryptoAES
+from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
+from cryptography.hazmat.primitives import serialization,padding as sym_padding
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives import padding as sym_padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -33,100 +33,74 @@ import base64
 
 def decrypt_payload(encrypted_payload_base64, aes_key, iv):
     encrypted_payload = base64.b64decode(encrypted_payload_base64)
-    cipher_aes = AES.new(aes_key, AES.MODE_CBC, iv)
-    decrypted_data = unpad(cipher_aes.decrypt(encrypted_payload), AES.block_size)
+    cipher_aes = CryptoAES.new(aes_key, CryptoAES.MODE_CBC, iv)
+    decrypted_data = unpad(cipher_aes.decrypt(encrypted_payload), CryptoAES.block_size)
     return decrypted_data.decode("utf-8")
 
-
 def decrypt_aes_key(encrypted_key_b64, private_key_path, passphrase=None):
-    from cryptography.hazmat.primitives.asymmetric import padding
     encrypted_key = base64.b64decode(encrypted_key_b64)
-
     with open(private_key_path, "rb") as key_file:
         private_key = serialization.load_pem_private_key(
             key_file.read(),
             password=passphrase.encode() if passphrase else None,
+            backend=default_backend()
         )
-
     aes_key = private_key.decrypt(
         encrypted_key,
-        padding.OAEP(
-            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+        asym_padding.OAEP(
+            mgf=asym_padding.MGF1(algorithm=hashes.SHA256()),
             algorithm=hashes.SHA256(),
             label=None
         )
     )
     return aes_key
 
-
-        
-
-
-
 def decrypt_flow_data(encrypted_data_b64, aes_key, iv_b64):
     try:
-        # Clean up the Base64 input just in case
         encrypted_data_b64 = encrypted_data_b64.replace("\n", "").replace(" ", "")
         iv_b64 = iv_b64.replace("\n", "").replace(" ", "")
-
-        # Decode Base64 inputs
         encrypted_data = base64.b64decode(encrypted_data_b64)
         iv = base64.b64decode(iv_b64)
 
-        # Logging the decryption inputs
-        logger.debug(f" Encrypted data length: {len(encrypted_data)}")
-        logger.debug(f" AES key length: {len(aes_key)}")
+        logger.debug(f"Encrypted data length: {len(encrypted_data)}")
+        logger.debug(f"AES key length: {len(aes_key)}")
         logger.debug(f"IV length: {len(iv)}")
         logger.debug(f"Encrypted data mod block size: {len(encrypted_data) % 16}")
 
-        # Validate block length
         if len(encrypted_data) % 16 != 0:
-            logger.error("❌ Encrypted data is not a multiple of the AES block size (16).")
             raise ValueError("The length of the provided data is not a multiple of the block length.")
 
-        # Initialize decryption cipher
         cipher = Cipher(algorithms.AES(aes_key), modes.CBC(iv), backend=default_backend())
         decryptor = cipher.decryptor()
-
-        # Decrypt and unpad
         padded_plaintext = decryptor.update(encrypted_data) + decryptor.finalize()
+
         unpadder = sym_padding.PKCS7(128).unpadder()
         plaintext = unpadder.update(padded_plaintext) + unpadder.finalize()
 
-        # Success
         return plaintext.decode("utf-8")
 
     except Exception as e:
-        logger.error(f"❌ Decryption failed: {str(e)}", exc_info=True)
-        raise  # Reraise to handle upstream (still gives the 500 if unhandled)
-
-
+        logger.error(f"Decryption failed: {str(e)}", exc_info=True)
+        raise
 
 def re_encrypt_payload(plaintext, aes_key, iv):
-    cipher_aes = AES.new(aes_key, AES.MODE_CBC, iv)
-    encrypted = cipher_aes.encrypt(pad(plaintext.encode("utf-8"), AES.block_size))
+    cipher_aes = CryptoAES.new(aes_key, CryptoAES.MODE_CBC, iv)
+    encrypted = cipher_aes.encrypt(pad(plaintext.encode("utf-8"), CryptoAES.block_size))
     return base64.b64encode(encrypted).decode("utf-8")
-
 
 def encrypt_with_aes_key(aes_key, plaintext_json, iv=None):
     from os import urandom
-
     if iv is None:
         iv = urandom(16)
-
-    # Pad the data first
     padder = sym_padding.PKCS7(128).padder()
     padded_data = padder.update(plaintext_json.encode()) + padder.finalize()
-
     cipher = Cipher(algorithms.AES(aes_key), modes.CBC(iv), backend=default_backend())
     encryptor = cipher.encryptor()
     encrypted = encryptor.update(padded_data) + encryptor.finalize()
-
     return {
         "encrypted_payload": base64.b64encode(encrypted).decode(),
         "initial_vector": base64.b64encode(iv).decode()
     }
-
 
 def load_encrypted_private_key(file_path="private.pem", passphrase=None):
     with open(file_path, "rb") as key_file:
