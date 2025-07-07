@@ -22,8 +22,9 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import serialization, hashes
-
-
+from cryptography.hazmat.primitives import padding as sym_padding
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
 from Crypto.PublicKey import RSA
 import base64
 
@@ -60,13 +61,22 @@ def decrypt_aes_key(encrypted_key_b64, private_key_path, passphrase=None):
 
         
 
+
+
 def decrypt_flow_data(encrypted_data_b64, aes_key, iv_b64):
-    iv = base64.b64decode(iv_b64)
-    cipher = AES.new(aes_key, AES.MODE_CBC, iv)
     encrypted_data = base64.b64decode(encrypted_data_b64)
-    decrypted_padded = cipher.decrypt(encrypted_data)
-    decrypted = unpad(decrypted_padded, AES.block_size)
-    return decrypted.decode("utf-8")
+    iv = base64.b64decode(iv_b64)
+
+    cipher = Cipher(algorithms.AES(aes_key), modes.CBC(iv), backend=default_backend())
+    decryptor = cipher.decryptor()
+    padded_plaintext = decryptor.update(encrypted_data) + decryptor.finalize()
+
+    # ✅ Remove padding
+    unpadder = sym_padding.PKCS7(128).unpadder()  # AES block size is 128 bits (16 bytes)
+    plaintext = unpadder.update(padded_plaintext) + unpadder.finalize()
+
+    return plaintext.decode("utf-8")
+
 
 
 def re_encrypt_payload(plaintext, aes_key, iv):
