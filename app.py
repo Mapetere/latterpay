@@ -1,195 +1,300 @@
+from flask import Flask, request, jsonify
+from datetime import datetime
 import os
 import json
-import base64
-import logging
 import sqlite3
-import threading
+from sqlite3 import OperationalError
+from paynow import Paynow
+import sys
 import time
-from datetime import datetime
-from flask import Flask, request, jsonify
-from Crypto.Cipher import AES as CryptoAES
-from Crypto.Util.Padding import pad, unpad
-from Crypto.Random import get_random_bytes
-from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
-from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.backends import default_backend
+import logging
 from dotenv import load_dotenv
+import threading
+from services.pygwan_whatsapp import whatsapp
+from services.config import CUSTOM_TYPES_FILE, PAYMENTS_FILE
+from services.sessions import check_session_timeout, cancel_session, initialize_session,load_session,save_session
+from services.donationflow import handle_user_message
+from services.sessions import monitor_sessions
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import unpad
+from Crypto.Util.Padding import pad
+from Crypto.Cipher import AES, PKCS1_OAEP
+from Crypto.PublicKey import RSA
+import base64
 
-# Load environment
-load_dotenv()
 
-# Flask app
-app = Flask(__name__)
 
-# Logging
+
+def decrypt_payload(encrypted_payload_base64, aes_key, iv):
+    encrypted_payload = base64.b64decode(encrypted_payload_base64)
+    cipher_aes = AES.new(aes_key, AES.MODE_CBC, iv)
+    decrypted_data = unpad(cipher_aes.decrypt(encrypted_payload), AES.block_size)
+    return decrypted_data.decode("utf-8")
+
+def decrypt_aes_key(encrypted_key_b64, private_key_path, passphrase):
+    with open(private_key_path, "rb") as key_file:
+        private_key = RSA.import_key(key_file.read(), passphrase=passphrase)
+        cipher_rsa = PKCS1_OAEP.new(private_key)
+        decrypted_key = cipher_rsa.decrypt(base64.b64decode(encrypted_key_b64))
+        return decrypted_key
+
+def re_encrypt_payload(plaintext, aes_key, iv):
+    cipher_aes = AES.new(aes_key, AES.MODE_CBC, iv)
+    encrypted = cipher_aes.encrypt(pad(plaintext.encode("utf-8"), AES.block_size))
+    return base64.b64encode(encrypted).decode("utf-8")
+
+
+def encrypt_with_aes_key(aes_key, plaintext_json_str):
+    iv = os.urandom(16)
+    cipher = AES.new(aes_key, AES.MODE_CBC, iv)
+    padded = pad(plaintext_json_str.encode("utf-8"), AES.block_size)
+    encrypted = cipher.encrypt(padded)
+    return base64.b64encode(iv + encrypted).decode("utf-8")
+
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('webhook.log')
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('app.log')
     ]
 )
 logger = logging.getLogger(__name__)
 
-# DB setup
-DB_NAME = "botdata.db"
+
+load_dotenv()
+
+
+for file_path in [CUSTOM_TYPES_FILE, PAYMENTS_FILE]:
+    if not os.path.exists(file_path):
+        with open(file_path, 'w') as f:
+            json.dump([], f)
+
+latterpay = Flask(__name__)
+
+
+
+
 def init_db():
-    conn = sqlite3.connect(DB_NAME, timeout=10)
+    conn = sqlite3.connect("botdata.db", timeout=10)
     cursor = conn.cursor()
+
+    # Sent Messages Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sent_messages (
             msg_id TEXT PRIMARY KEY,
             sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # Known Users Table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS known_users (
+            phone TEXT PRIMARY KEY,
+            first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Sessions Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sessions (
             phone TEXT PRIMARY KEY,
             step TEXT,
             data TEXT,
-            last_active TIMESTAMP,
-            warned INTEGER DEFAULT 0
+            last_active TIMESTAMP
         )
     """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS volunteers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        surname TEXT,
+        phone TEXT,
+        email TEXT,
+        skill TEXT,
+        area TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+
+    # Safely added the  'warned' column if it doesn't exist
+    cursor.execute("PRAGMA table_info(sessions)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "warned" not in columns:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN warned INTEGER DEFAULT 0")
+
     conn.commit()
     conn.close()
 
-# RSA + AES logic
-PRIVATE_KEY_FILE = os.getenv('PRIVATE_KEY_FILE', 'private.pem')
-PRIVATE_KEY_PASSPHRASE = os.getenv('PRIVATE_KEY_PASSPHRASE')
-VERIFY_TOKEN = os.getenv('VERIFY_TOKEN')
 
-def load_private_key():
-    with open(PRIVATE_KEY_FILE, "rb") as key_file:
-        return serialization.load_pem_private_key(
-            key_file.read(),
-            password=PRIVATE_KEY_PASSPHRASE.encode() if PRIVATE_KEY_PASSPHRASE else None,
-            backend=default_backend()
-        )
+def is_echo_message(msg_id):
+    conn = sqlite3.connect("botdata.db", timeout=10)
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM sent_messages WHERE msg_id = ?", (msg_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return result is not None
 
-def decrypt_aes_key(encrypted_key_b64):
-    encrypted_key = base64.b64decode(encrypted_key_b64)
-    private_key = load_private_key()
-    return private_key.decrypt(
-        encrypted_key,
-        asym_padding.OAEP(
-            mgf=asym_padding.MGF1(algorithm=hashes.SHA256()),
-            algorithm=hashes.SHA256(),
-            label=None
-        )
-    )
-
-def decrypt_flow_data(encrypted_data_b64, aes_key, iv_b64):
-    encrypted_data = base64.b64decode(encrypted_data_b64)
-    iv = base64.b64decode(iv_b64)
-    cipher = CryptoAES.new(aes_key, CryptoAES.MODE_CBC, iv)
-    decrypted = unpad(cipher.decrypt(encrypted_data), CryptoAES.block_size)
-    return decrypted.decode("utf-8")
-
-# Sessions
-sessions = {}
-
-def init_session(phone, name):
-    sessions[phone] = {"step": "start", "data": {}, "last_active": datetime.now(), "name": name}
-
-def save_session(phone, session):
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT OR REPLACE INTO sessions (phone, step, data, last_active, warned)
-        VALUES (?, ?, ?, ?, ?)
-    """, (phone, session['step'], json.dumps(session['data']), session['last_active'], 0))
+def save_sent_message_id(msg_id):
+    conn = sqlite3.connect("botdata.db", timeout=10)
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR IGNORE INTO sent_messages (msg_id) VALUES (?)", (msg_id,))
     conn.commit()
     conn.close()
 
-# Message filter
-seen_messages = set()
+def delete_old_ids():
+    conn = sqlite3.connect("botdata.db", timeout=10)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM sent_messages WHERE sent_at < datetime('now', '-15 minutes')")
+    conn.commit()
+    conn.close()
 
-def is_duplicate(msg_id):
-    return msg_id in seen_messages
+def message_exists(msg_id):
+    return is_echo_message(msg_id)
 
-def mark_message_seen(msg_id):
-    seen_messages.add(msg_id)
 
-def cleanup_seen():
-    while True:
-        seen_messages.clear()
-        time.sleep(600)
+def cleanup_message_ids():
+    def cleaner():
+        while True:
+            try:
+                delete_old_ids()
+                time.sleep(3600)  # every 10 minutes
+            except Exception as e:
+                logger.warning(f"[CLEANUP ERROR] {e}")
+                time.sleep(600)
 
-threading.Thread(target=cleanup_seen, daemon=True).start()
+    threading.Thread(target=cleaner, daemon=True).start()
 
-@app.route('/')
+
+@latterpay.route("/")
 def home():
-    return "Donation webhook running"
+    logger.info("Home endpoint accessed")
+    return "WhatsApp Donation Service is running"
 
-@app.route('/webhook', methods=['GET', 'POST'])
-def webhook():
-    if request.method == 'GET':
-        token = request.args.get("hub.verify_token")
-        challenge = request.args.get("hub.challenge")
-        if token == VERIFY_TOKEN:
-            return challenge or "", 200
-        return "Forbidden", 403
+@latterpay.route("/payment-return")
+def payment_return():
+    return "<h2>Payment attempted. You may now return to WhatsApp.</h2>"
 
+@latterpay.route("/payment-result", methods=["POST"])
+def payment_result():
     try:
-        data = request.get_json(force=True, silent=True)
-        if not data:
-            return jsonify({"status": "error", "message": "Empty request"}), 400
+        raw_data = request.data.decode("utf-8")
+        logger.info("Paynow Result Received: \n" + raw_data)
+        return "OK"
+    except Exception as e:
+        logger.error(f"❌ Error handling Paynow result: {e}")
+        return "ERROR", 500
 
-        enc_key = data.get("encrypted_aes_key")
-        enc_data = data.get("encrypted_flow_data")
-        iv = data.get("initial_vector")
+@latterpay.route("/webhook", methods=["GET", "POST"])
+def webhook_debug():
+    try:
+        if request.method == "GET":
+            verify_token = request.args.get("hub.verify_token")
+            challenge = request.args.get("hub.challenge")
+            if verify_token == os.getenv("VERIFY_TOKEN"):
+                logger.info("Webhook verified successfully!")
+                return challenge, 200
+            return "Verification failed", 403
 
-        if enc_key and enc_data and iv:
-            aes_key = decrypt_aes_key(enc_key)
-            decrypted = decrypt_flow_data(enc_data, aes_key, iv)
-            parsed = json.loads(decrypted)
+        if request.method == "POST":
+            data = request.get_json(force=True, silent=True)
+            if not data:
+                logger.error("No valid JSON data received.")
+                return jsonify({"status": "error", "message": "No data"}), 400
+            
+            encrypted_aes_key = request.headers.get("X-Hub-Signature-Encrypted-AES-Key")
+            encrypted_payload = request.get_data()  
 
-            # Mock donation flow
-            action = parsed.get("action")
-            if action == "INIT":
-                return jsonify({"status": "Flow started"})
-            elif action == "data_exchange":
-                donation = parsed.get("data", {}).get("donation_amount")
-                return jsonify({"status": "Thank you for your donation", "amount": donation})
-            else:
-                return jsonify({"status": "Unknown action"})
+            if encrypted_aes_key:
+                aes_key = decrypt_aes_key(
+                    encrypted_aes_key,
+                    "private.pem",
+                    os.getenv("PRIVATE_KEY_PASSPHRASE")
+                )
 
-        # Basic fallback for messages
-        msg = data.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {}).get("messages", [{}])[0]
-        msg_id = msg.get("id")
-        phone = msg.get("from")
+                # Just echo back a test string encrypted with the AES key
+                echo_back = encrypt_with_aes_key(aes_key, '{"success":true}')
+                
+                return echo_back, 200
+                        
 
-        if not msg_id or not phone or is_duplicate(msg_id):
-            return "ok"
-        mark_message_seen(msg_id)
+            if all(k in data for k in ("encrypted_key", "iv", "encrypted_payload")):
+                try:
+                    aes_key = decrypt_aes_key(data["encrypted_key"])
+                    iv = base64.b64decode(data["iv"])
+                    decrypted = decrypt_payload(data["encrypted_payload"], aes_key, iv)
+                    re_encrypted = re_encrypt_payload(decrypted, aes_key, iv)
+                    return jsonify({"encrypted_payload": re_encrypted}), 200
+                except Exception as e:
+                    logger.error(f"Decryption error: {str(e)}", exc_info=True)
+                    return jsonify({"status": "error", "message": "decryption failed"}), 500
 
-        text = msg.get("text", {}).get("body", "").strip()
-        logger.info(f"Msg from {phone}: {text}")
 
-        # Initialize session
-        if phone not in sessions:
-            init_session(phone, "User")
+            entry = data.get("entry", [{}])[0]
+            changes = entry.get("changes", [{}])[0]
+            value = changes.get("value", {})
+            msg_data = value.get("messages", [{}])[0] if value.get("messages") else None
 
-        session = sessions[phone]
-        session["last_active"] = datetime.now()
-        save_session(phone, session)
+            if not msg_data:
+                logger.info("No user message detected. Ignored.")
+                return "ok"
 
-        # Simple donation logic
-        if text.lower() == "donate":
-            return jsonify({"text": "Please enter donation amount"})
-        elif text.isdigit():
-            return jsonify({"text": f"Thanks for donating ${text}"})
+            msg_id = msg_data.get("id")
+            msg_from = msg_data.get("from")
 
-        return jsonify({"text": "Send 'donate' to start"})
+            if is_echo_message(msg_id) or msg_data.get("echo" ) or  message_exists(msg_id) or msg_from in [
+                os.getenv("PHONE_NUMBER_ID"), os.getenv("WHATSAPP_BOT_NUMBER")
+            ]:
+                logger.info("Echo/self message ignored.")
+                save_sent_message_id(msg_id)
+                return "ok"
+
+
+
+
+
+            
+            phone = whatsapp.get_mobile(data)
+            name = whatsapp.get_name(data)
+            msg = whatsapp.get_message(data).strip()
+
+            logger.info(f"Valid message received from {phone}: {msg}")
+
+            # Try to load an existing session from the my database2112211
+            session = load_session(phone)
+
+            if not session:
+                initialize_session(phone, name)
+                return jsonify({"status": "session initialized"}), 200
+            
+
+            if check_session_timeout(phone):
+                return jsonify({"status": "session timeout"}), 200
+
+
+            if msg.lower() == "cancel":
+                cancel_session(phone)
+                return jsonify({"status": "session cancelled"}), 200
+
+            # Update last_active timestamp in the database
+            session["last_active"] = datetime.now()
+            save_session(phone, session["step"], session["data"])  
+
+            # Continue handling the message
+            return handle_user_message(phone, msg, session)
+
 
     except Exception as e:
-        logger.error(f"Webhook error: {e}", exc_info=True)
+        logger.error(f"Message processing error: {str(e)}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     init_db()
-    port = int(os.getenv("PORT", 8010))
-    logger.info(f"Running donation webhook on port {port}")
-    app.run(host='0.0.0.0', port=port)
+    monitor_sessions()
+    port = int(os.environ.get("PORT", 8010))
+    logger.info(f"Starting server on port {port}")
+    latterpay.run(host="0.0.0.0", port=port)
