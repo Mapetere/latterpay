@@ -64,19 +64,41 @@ def decrypt_aes_key(encrypted_key_b64, private_key_path, passphrase=None):
 
 
 def decrypt_flow_data(encrypted_data_b64, aes_key, iv_b64):
-    encrypted_data = base64.b64decode(encrypted_data_b64)
-    iv = base64.b64decode(iv_b64)
+    try:
+        # Clean up the Base64 input just in case
+        encrypted_data_b64 = encrypted_data_b64.replace("\n", "").replace(" ", "")
+        iv_b64 = iv_b64.replace("\n", "").replace(" ", "")
 
-    cipher = Cipher(algorithms.AES(aes_key), modes.CBC(iv), backend=default_backend())
-    decryptor = cipher.decryptor()
+        # Decode Base64 inputs
+        encrypted_data = base64.b64decode(encrypted_data_b64)
+        iv = base64.b64decode(iv_b64)
 
-    padded_plaintext = decryptor.update(encrypted_data) + decryptor.finalize()
+        # Logging the decryption inputs
+        logger.debug(f" Encrypted data length: {len(encrypted_data)}")
+        logger.debug(f" AES key length: {len(aes_key)}")
+        logger.debug(f"IV length: {len(iv)}")
+        logger.debug(f"Encrypted data mod block size: {len(encrypted_data) % 16}")
 
-    #  Unpad the plaintext
-    unpadder = sym_padding.PKCS7(128).unpadder()
-    plaintext = unpadder.update(padded_plaintext) + unpadder.finalize()
+        # Validate block length
+        if len(encrypted_data) % 16 != 0:
+            logger.error("❌ Encrypted data is not a multiple of the AES block size (16).")
+            raise ValueError("The length of the provided data is not a multiple of the block length.")
 
-    return plaintext.decode("utf-8")
+        # Initialize decryption cipher
+        cipher = Cipher(algorithms.AES(aes_key), modes.CBC(iv), backend=default_backend())
+        decryptor = cipher.decryptor()
+
+        # Decrypt and unpad
+        padded_plaintext = decryptor.update(encrypted_data) + decryptor.finalize()
+        unpadder = sym_padding.PKCS7(128).unpadder()
+        plaintext = unpadder.update(padded_plaintext) + unpadder.finalize()
+
+        # Success
+        return plaintext.decode("utf-8")
+
+    except Exception as e:
+        logger.error(f"❌ Decryption failed: {str(e)}", exc_info=True)
+        raise  # Reraise to handle upstream (still gives the 500 if unhandled)
 
 
 
