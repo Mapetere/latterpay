@@ -69,10 +69,11 @@ def decrypt_flow_data(encrypted_data_b64, aes_key, iv_b64):
 
     cipher = Cipher(algorithms.AES(aes_key), modes.CBC(iv), backend=default_backend())
     decryptor = cipher.decryptor()
+
     padded_plaintext = decryptor.update(encrypted_data) + decryptor.finalize()
 
-    # ✅ Remove padding
-    unpadder = sym_padding.PKCS7(128).unpadder()  # AES block size is 128 bits (16 bytes)
+    #  Unpad the plaintext
+    unpadder = sym_padding.PKCS7(128).unpadder()
     plaintext = unpadder.update(padded_plaintext) + unpadder.finalize()
 
     return plaintext.decode("utf-8")
@@ -85,12 +86,24 @@ def re_encrypt_payload(plaintext, aes_key, iv):
     return base64.b64encode(encrypted).decode("utf-8")
 
 
-def encrypt_with_aes_key(aes_key, plaintext_json_str):
-    iv = os.urandom(16)
-    cipher = AES.new(aes_key, AES.MODE_CBC, iv)
-    padded = pad(plaintext_json_str.encode("utf-8"), AES.block_size)
-    encrypted = cipher.encrypt(padded)
-    return base64.b64encode(iv + encrypted).decode("utf-8")
+def encrypt_with_aes_key(aes_key, plaintext_json, iv=None):
+    from os import urandom
+
+    if iv is None:
+        iv = urandom(16)
+
+    # Pad the data first
+    padder = sym_padding.PKCS7(128).padder()
+    padded_data = padder.update(plaintext_json.encode()) + padder.finalize()
+
+    cipher = Cipher(algorithms.AES(aes_key), modes.CBC(iv), backend=default_backend())
+    encryptor = cipher.encryptor()
+    encrypted = encryptor.update(padded_data) + encryptor.finalize()
+
+    return {
+        "encrypted_payload": base64.b64encode(encrypted).decode(),
+        "initial_vector": base64.b64encode(iv).decode()
+    }
 
 
 def load_encrypted_private_key(file_path="private.pem", passphrase=None):
