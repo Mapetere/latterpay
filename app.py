@@ -20,6 +20,42 @@ from Crypto.Util.Padding import pad, unpad
 from Crypto.PublicKey import RSA
 import base64
 
+
+SCREEN_RESPONSES = {
+    "PERSONAL_INFO": {
+        "screen": "PERSONAL_INFO",
+        "data": {}
+    },
+    "TRAINING": {
+        "screen": "TRAINING",
+        "data": {}
+    },
+    "VOLUNTEER": {
+        "screen": "VOLUNTEER",
+        "data": {}
+    },
+    "SUMMARY": {
+        "screen": "SUMMARY",
+        "data": {}
+    },
+    "TERMS": {
+        "screen": "TERMS",
+        "data": {}
+    },
+    "SUCCESS": lambda flow_token, param_value: {
+        "screen": "SUCCESS",
+        "data": {
+            "extension_message_response": {
+                "params": {
+                    "flow_token": flow_token,
+                    "some_param_name": param_value
+                }
+            }
+        }
+    }
+}
+
+
 load_dotenv()
 
 logging.basicConfig(
@@ -183,21 +219,19 @@ def webhook_debug():
                     flow_token = decrypted_data.get("flow_token", "UNKNOWN")
 
                     if action == "INIT":
-                        response = {"screen": "PERSONAL_INFO", "data": {}}
+                        response = SCREEN_RESPONSES["PERSONAL_INFO"]
+
                     elif action == "data_exchange":
-                        response = {
-                            "screen": "SUCCESS",
-                            "data": {
-                                "extension_message_response": {
-                                    "params": {
-                                        "flow_token": flow_token,
-                                        "some_param_name": "VOLUNTEER_OPTION_1"
-                                    }
-                                }
-                            }
-                        }
+                       param = decrypted_data.get("data", {}).get("some_param", "DEFAULT_VALUE")
+                       response = SCREEN_RESPONSES["SUCCESS"](flow_token, param)
+                       
+                    elif action == "BACK":
+                        response = SCREEN_RESPONSES.get("SUMMARY")
+
                     else:
-                        response = {"screen": "SUMMARY", "data": {}}
+                        logger.warning(f"Unknown action received: {action}")
+                        response = SCREEN_RESPONSES.get("TERMS")
+
 
                     encrypted_response = re_encrypt_payload(json.dumps(response), aes_key, iv)
                     return jsonify({"encrypted_flow_data": encrypted_response})
