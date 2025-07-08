@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 import threading
 from services.pygwan_whatsapp import whatsapp
 from services.config import CUSTOM_TYPES_FILE, PAYMENTS_FILE
-from services.sessions import check_session_timeout, cancel_session, initialize_session,load_session,save_session
+from services.sessions import check_session_timeout, cancel_session, initialize_session,load_session,save_session,update_user_step
 from services.donationflow import handle_user_message
 from services.registrationflow import RegistrationFlow
 from services.whatsappservice import WhatsAppService
