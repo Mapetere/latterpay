@@ -1,0 +1,18 @@
+from services.pygwan_whatsapp import whatsapp
+from services.config import finance_phone
+from datetime import datetime, timedelta
+import os
+
+
+
+
+def notify_finance_director(d):
+    msg = (
+        f"📥 *New Church Payment!*\n\n"
+        f"Payee Name: {d['name']}\n"
+        f"Amount: {d['amount']}\n"
+        f"Purpose: {d['donation_type']}\n"
+        f"Congregation: {d['region']}\n"
+        f"Note: {d['note']}"
+    )
+    whatsapp.send_message(msg, finance_phone)

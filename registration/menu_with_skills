@@ -1,0 +1,32 @@
+{
+  "messaging_product": "whatsapp",
+  "to": "{{user_phone}}",
+  "type": "interactive",
+  "interactive": {
+    "type": "button",
+    "body": {
+      "text": "Basa raunogona nderei? (What work can you do?)"
+    },
+    "action": {
+      "buttons": [
+        {"type": "reply", "reply": {"id": "carpenter", "title": "Carpenter"}},
+        {"type": "reply", "reply": {"id": "welder", "title": "Welder"}},
+        {"type": "reply", "reply": {"id": "builder", "title": "Builder - Vavaki"}},
+        {"type": "reply", "reply": {"id": "electrician", "title": "Electrician - Magetsi"}},
+        {"type": "reply", "reply": {"id": "plumber", "title": "Plumber"}},
+        {"type": "reply", "reply": {"id": "tiler", "title": "Tiler"}},
+        {"type": "reply", "reply": {"id": "engineer", "title": "Engineer"}},
+        {"type": "reply", "reply": {"id": "security", "title": "Security"}},
+        {"type": "reply", "reply": {"id": "retailer", "title": "Retailer - Magrocery"}},
+        {"type": "reply", "reply": {"id": "transport", "title": "Transport - Lorry, Tractor, Kombis, Bus etc"}},
+        {"type": "reply", "reply": {"id": "hardware", "title": "Hardware"}},
+        {"type": "reply", "reply": {"id": "accounts", "title": "Accounts"}},
+        {"type": "reply", "reply": {"id": "wholesale", "title": "Wholesale"}},
+        {"type": "reply", "reply": {"id": "marketing", "title": "Marketing - including digital"}},
+        {"type": "reply", "reply": {"id": "it", "title": "IT - Data science - analytics"}},
+        {"type": "reply", "reply": {"id": "video_photography", "title": "Video and Photography"}},
+        {"type": "reply", "reply": {"id": "history", "title": "History capturing"}}
+      ]
+    }
+  }
+}
