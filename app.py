@@ -15,41 +15,9 @@ from services.config import CUSTOM_TYPES_FILE, PAYMENTS_FILE
 from services.sessions import check_session_timeout, cancel_session, initialize_session,load_session,save_session
 from services.donationflow import handle_user_message
 from services.sessions import monitor_sessions
-from Crypto.Cipher import AES
-from Crypto.Util.Padding import unpad
-from Crypto.Util.Padding import pad
-from Crypto.Cipher import AES, PKCS1_OAEP
-from Crypto.PublicKey import RSA
-import base64
 
 
 
-
-def decrypt_payload(encrypted_payload_base64, aes_key, iv):
-    encrypted_payload = base64.b64decode(encrypted_payload_base64)
-    cipher_aes = AES.new(aes_key, AES.MODE_CBC, iv)
-    decrypted_data = unpad(cipher_aes.decrypt(encrypted_payload), AES.block_size)
-    return decrypted_data.decode("utf-8")
-
-def decrypt_aes_key(encrypted_key_b64, private_key_path, passphrase):
-    with open(private_key_path, "rb") as key_file:
-        private_key = RSA.import_key(key_file.read(), passphrase=passphrase)
-        cipher_rsa = PKCS1_OAEP.new(private_key)
-        decrypted_key = cipher_rsa.decrypt(base64.b64decode(encrypted_key_b64))
-        return decrypted_key
-
-def re_encrypt_payload(plaintext, aes_key, iv):
-    cipher_aes = AES.new(aes_key, AES.MODE_CBC, iv)
-    encrypted = cipher_aes.encrypt(pad(plaintext.encode("utf-8"), AES.block_size))
-    return base64.b64encode(encrypted).decode("utf-8")
-
-
-def encrypt_with_aes_key(aes_key, plaintext_json_str):
-    iv = os.urandom(16)
-    cipher = AES.new(aes_key, AES.MODE_CBC, iv)
-    padded = pad(plaintext_json_str.encode("utf-8"), AES.block_size)
-    encrypted = cipher.encrypt(padded)
-    return base64.b64encode(iv + encrypted).decode("utf-8")
 
 
 logging.basicConfig(
@@ -105,20 +73,6 @@ def init_db():
             last_active TIMESTAMP
         )
     """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS volunteers (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        surname TEXT,
-        phone TEXT,
-        email TEXT,
-        skill TEXT,
-        area TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
 
     # Safely added the  'warned' column if it doesn't exist
     cursor.execute("PRAGMA table_info(sessions)")
@@ -204,34 +158,6 @@ def webhook_debug():
             if not data:
                 logger.error("No valid JSON data received.")
                 return jsonify({"status": "error", "message": "No data"}), 400
-            
-            encrypted_aes_key = request.headers.get("X-Hub-Signature-Encrypted-AES-Key")
-            encrypted_payload = request.get_data()  
-
-            if encrypted_aes_key:
-                aes_key = decrypt_aes_key(
-                    encrypted_aes_key,
-                    "private.pem",
-                    os.getenv("PRIVATE_KEY_PASSPHRASE")
-                )
-
-                # Just echo back a test string encrypted with the AES key
-                echo_back = encrypt_with_aes_key(aes_key, '{"success":true}')
-                
-                return echo_back, 200
-                        
-
-            if all(k in data for k in ("encrypted_key", "iv", "encrypted_payload")):
-                try:
-                    aes_key = decrypt_aes_key(data["encrypted_key"])
-                    iv = base64.b64decode(data["iv"])
-                    decrypted = decrypt_payload(data["encrypted_payload"], aes_key, iv)
-                    re_encrypted = re_encrypt_payload(decrypted, aes_key, iv)
-                    return jsonify({"encrypted_payload": re_encrypted}), 200
-                except Exception as e:
-                    logger.error(f"Decryption error: {str(e)}", exc_info=True)
-                    return jsonify({"status": "error", "message": "decryption failed"}), 500
-
 
             entry = data.get("entry", [{}])[0]
             changes = entry.get("changes", [{}])[0]
