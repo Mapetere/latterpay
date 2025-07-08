@@ -2,10 +2,21 @@
 
 from services.sessions import save_session, update_last_active, cancel_session
 from services.pygwan_whatsapp import whatsapp
+from services.pygwan_whatsapp import whatsapp
+from services.sessions import save_session
+
+class RegistrationFlow:
+    @staticmethod
+    def start_registration(phone):
+        whatsapp.send_message("📝 Registration started.\n" \
+        " What's your full name?", phone)
+        session = {"mode": "registration", "step": "awaiting_name", "data": {}}
+        save_session(phone, session["step"], session["data"])
 
 step_handlers = {}
 
-def handle_message(phone, msg, session):
+def handle_registration_message(phone, msg, session):
+    
     update_last_active(phone)
     step = session.get("step", "awaiting_name")
     handler = step_handlers.get(step)
@@ -16,6 +27,7 @@ def handle_message(phone, msg, session):
         session["step"] = "awaiting_name"
         save_session(phone, session["step"], session["data"])
         return handle_name_step(phone, msg, session)
+
 
 def handle_button_response(button_id, phone):
     # Example: final confirm, skill type selection, etc.

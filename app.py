@@ -15,7 +15,6 @@ from services.config import CUSTOM_TYPES_FILE, PAYMENTS_FILE
 from services.sessions import check_session_timeout, cancel_session, initialize_session,load_session,save_session,update_user_step
 from services.donationflow import handle_user_message
 from services.registrationflow import RegistrationFlow
-from services.whatsappservice import WhatsAppService
 
 from services.sessions import monitor_sessions
 
@@ -77,6 +76,18 @@ def init_db():
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS registrations (
+                   phone TEXT PRIMARY KEY ,
+                   name TEXT,
+                   surname TEXT,
+                   email TEXT,
+                   skill TEXT,
+                   area TEXT,
+                   registered_at  TIMESTAMP)
+                   
+                   
+                   """)
     # Safely added the  'warned' column if it doesn't exist
     cursor.execute("PRAGMA table_info(sessions)")
     columns = [col[1] for col in cursor.fetchall()]

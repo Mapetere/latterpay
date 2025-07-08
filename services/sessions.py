@@ -266,8 +266,8 @@ def get_user_registration(phone):
 
 def save_registration_to_db(phone, **data):
     """Save registration data to permanent storage"""
-    # Implement your database saving logic here
-    # Example:
+
+    
     conn = sqlite3.connect("botdata.db")
     cursor = conn.cursor()
     cursor.execute("""

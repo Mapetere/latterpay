@@ -20,7 +20,7 @@
         {
           "type": "reply",
           "reply": {
-            "id": "pay_btn",
+            "id": "payment_btn",
             "title": "💸 Make Payment"
           }
         }
