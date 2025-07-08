@@ -194,18 +194,9 @@ def webhook_debug():
             return "Verification failed", 403
 
         if request.method == "POST":
-            try:
-                data = request.get_json(force=True)
-            except Exception:
-                data = None
-
-
-            if not data:
-                logger.warning("No JSON data received for fallback processing.")
-                return jsonify({"status": "error", "message": "Invalid or missing JSON data"}), 400
-            
-
             encrypted_aes_key = request.headers.get("X-Hub-Signature-Encrypted-AES-Key")
+            
+            # --- If encrypted request (Meta flow) --- #
             if encrypted_aes_key:
                 try:
                     aes_key = decrypt_aes_key(
@@ -216,6 +207,7 @@ def webhook_debug():
                     json_body = json.loads(request.data.decode("utf-8"))
                     encrypted_flow_data = json_body.get("encrypted_flow_data")
                     iv_b64 = json_body.get("initial_vector")
+
                     if not encrypted_flow_data or not iv_b64:
                         return jsonify({"status": "error", "message": "Missing flow data or IV."}), 400
 
@@ -230,26 +222,32 @@ def webhook_debug():
 
                     if action == "INIT":
                         response = SCREEN_RESPONSES["PERSONAL_INFO"]
-
                     elif action == "data_exchange":
-                       param = decrypted_data.get("data", {}).get("some_param", "DEFAULT_VALUE")
-                       response = SCREEN_RESPONSES["SUCCESS"](flow_token, param)
-
+                        param = decrypted_data.get("data", {}).get("some_param", "VOLUNTEER_OPTION_1")
+                        response = SCREEN_RESPONSES["SUCCESS"](flow_token, param)
                     elif action == "BACK":
                         response = SCREEN_RESPONSES.get("SUMMARY")
-
                     else:
                         logger.warning(f"Unknown action received: {action}")
                         response = SCREEN_RESPONSES.get("TERMS")
 
-
                     encrypted_response = re_encrypt_payload(json.dumps(response), aes_key, iv)
                     return jsonify({"encrypted_flow_data": encrypted_response})
+
                 except Exception as e:
                     logger.error(f"❌ Error handling encrypted webhook: {e}", exc_info=True)
                     return jsonify({"status": "error", "message": str(e)}), 500
 
-            # fallback to regular message processing
+            # --- Fallback to normal (non-encrypted) WhatsApp webhook --- #
+            try:
+                data = request.get_json(force=True)
+                if not data:
+                    raise ValueError("Empty JSON")
+            except Exception as e:
+                logger.warning("No JSON data received for fallback processing.")
+                return jsonify({"status": "error", "message": "No valid JSON received"}), 400
+
+            # ---- WhatsApp message fallback logic ---- #
             entry = data.get("entry", [{}])[0]
             changes = entry.get("changes", [{}])[0]
             value = changes.get("value", {})
@@ -288,9 +286,8 @@ def webhook_debug():
             session["last_active"] = datetime.now()
             save_session(phone, session["step"], session["data"])
             return handle_user_message(phone, msg, session)
-
     except Exception as e:
-        logger.error(f"Webhook error: {str(e)}", exc_info=True)
+        logger.error(f"❌ Error processing webhook: {e}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == "__main__":
