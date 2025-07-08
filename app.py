@@ -194,7 +194,17 @@ def webhook_debug():
             return "Verification failed", 403
 
         if request.method == "POST":
-            data = request.get_json(force=True, silent=True)
+            try:
+                data = request.get_json(force=True)
+            except Exception:
+                data = None
+
+
+            if not data:
+                logger.warning("No JSON data received for fallback processing.")
+                return jsonify({"status": "error", "message": "Invalid or missing JSON data"}), 400
+            
+
             encrypted_aes_key = request.headers.get("X-Hub-Signature-Encrypted-AES-Key")
             if encrypted_aes_key:
                 try:
@@ -224,7 +234,7 @@ def webhook_debug():
                     elif action == "data_exchange":
                        param = decrypted_data.get("data", {}).get("some_param", "DEFAULT_VALUE")
                        response = SCREEN_RESPONSES["SUCCESS"](flow_token, param)
-                       
+
                     elif action == "BACK":
                         response = SCREEN_RESPONSES.get("SUMMARY")
 
