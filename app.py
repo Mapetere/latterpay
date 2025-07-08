@@ -153,6 +153,15 @@ def delete_old_ids():
     conn.commit()
     conn.close()
 
+def is_ignorable_system_payload(data):
+    return (
+        data.get("type") == "DEPLOY"
+        or data.get("type") == "BUILD"
+        or "deployment" in data
+        or "project" in data and "status" in data
+    )
+
+
 def cleanup_message_ids():
     def cleaner():
         while True:
@@ -203,6 +212,11 @@ def webhook_debug():
             if not data:
                 logger.warning("No JSON data received.")
                 return jsonify({"status": "error", "message": "No valid JSON received"}), 400
+            
+            if is_ignorable_system_payload(data):
+                logger.info("🔕 Ignored system-level webhook data.")
+                return "ok"
+
 
             # 🔐 Encrypted flow path (from Meta Flow)
             if "encrypted_flow_data" in data and "encrypted_aes_key" in data:
