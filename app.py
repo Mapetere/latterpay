@@ -197,31 +197,35 @@ def webhook_debug():
             return "Verification failed", 403
 
         if request.method == "POST":
+            # Log raw request to help debugging
+            logger.debug(f"Raw incoming data: {request.data}")
             data = request.get_json(force=True)
             if not data:
-                logger.warning("No JSON data received for processing.")
+                logger.warning("No JSON data received.")
                 return jsonify({"status": "error", "message": "No valid JSON received"}), 400
 
-            # Try encrypted AES logic
-            try:
-                aes_key_b64 = data.get("aes_key")
-                if aes_key_b64:
+            # 🔐 Encrypted flow path (from Meta Flow)
+            if "encrypted_flow_data" in data and "encrypted_aes_key" in data:
+                try:
+                    encrypted_data_b64 = data.get("encrypted_flow_data")
+                    encrypted_key_b64 = data.get("encrypted_aes_key")
+                    iv_b64 = data.get("initial_vector")
+
+                    if not (encrypted_data_b64 and encrypted_key_b64 and iv_b64):
+                        return jsonify({"error": "Missing encryption fields"}), 400
+
                     aes_key = decrypt_aes_key(
-                        aes_key_b64,
+                        encrypted_key_b64,
                         "private.pem",
                         os.getenv("PRIVATE_KEY_PASSPHRASE")
                     )
 
-                    # Assuming payload is in 'payload' field and is encrypted
-                    encrypted_payload_b64 = data.get("payload")
-                    if not encrypted_payload_b64:
-                        return jsonify({"error": "Missing encrypted payload"}), 400
+                    iv = b64decode(iv_b64)
+                    cipher = AES.new(aes_key, AES.MODE_CBC, iv)
+                    decrypted_bytes = unpad(cipher.decrypt(b64decode(encrypted_data_b64)), AES.block_size)
+                    decrypted_data = json.loads(decrypted_bytes.decode("utf-8"))
 
-                    encrypted_payload = b64decode(encrypted_payload_b64)
-                    cipher = AES.new(aes_key, AES.MODE_ECB)  # Use CBC if Meta docs require it
-                    decrypted_bytes = unpad(cipher.decrypt(encrypted_payload), AES.block_size)
-                    decrypted_data = json.loads(decrypted_bytes.decode('utf-8'))
-
+                    logger.info(f"Decrypted Meta flow data: {decrypted_data}")
                     action = decrypted_data.get("action")
                     flow_token = decrypted_data.get("flow_token", "UNKNOWN")
 
@@ -229,71 +233,80 @@ def webhook_debug():
                         response = SCREEN_RESPONSES["PERSONAL_INFO"]
                     elif action == "data_exchange":
                         param = decrypted_data.get("data", {}).get("some_param", "VOLUNTEER_OPTION_1")
-                        response = SCREEN_RESPONSES["SUCCESS"](flow_token, param)
+                        response = SCREEN_RESPONSES["SUCCESS"]
+                        response["data"]["extension_message_response"]["params"]["flow_token"] = flow_token
+                        response["data"]["extension_message_response"]["params"]["some_param_name"] = param
                     elif action == "BACK":
                         response = SCREEN_RESPONSES.get("SUMMARY", {"screen": "SUMMARY", "data": {}})
                     else:
                         logger.warning(f"Unknown action received: {action}")
                         response = SCREEN_RESPONSES.get("TERMS")
 
-                    json_payload = json.dumps(response).encode('utf-8')
+                    # Encrypt response
+                    json_payload = json.dumps(response).encode("utf-8")
+                    cipher = AES.new(aes_key, AES.MODE_CBC, iv)
                     padded_payload = pad(json_payload, AES.block_size)
                     encrypted_response = cipher.encrypt(padded_payload)
-                    encrypted_b64 = b64encode(encrypted_response).decode('utf-8')
+                    encrypted_b64 = b64encode(encrypted_response).decode("utf-8")
 
                     return encrypted_b64, 200, {"Content-Type": "text/plain"}
 
-            except Exception as e:
-                logger.error(f"❌ Error handling encrypted webhook: {e}", exc_info=True)
-                # Proceed to fallback if AES decryption fails
+                except Exception as e:
+                    logger.error(f"❌ Error in encrypted flow logic: {e}", exc_info=True)
+                    return jsonify({"status": "error", "message": str(e)}), 500
 
-            # --- Fallback to normal (non-encrypted) WhatsApp webhook --- #
-            try:
-                entry = data.get("entry", [{}])[0]
-                changes = entry.get("changes", [{}])[0]
-                value = changes.get("value", {})
-                msg_data = value.get("messages", [{}])[0] if value.get("messages") else None
+            # 💬 Regular WhatsApp fallback webhook logic
+            elif "entry" in data:
+                try:
+                    entry = data.get("entry", [{}])[0]
+                    changes = entry.get("changes", [{}])[0]
+                    value = changes.get("value", {})
+                    msg_data = value.get("messages", [{}])[0] if value.get("messages") else None
 
-                if not msg_data:
-                    return "ok"
+                    if not msg_data:
+                        return "ok"
 
-                msg_id = msg_data.get("id")
-                msg_from = msg_data.get("from")
+                    msg_id = msg_data.get("id")
+                    msg_from = msg_data.get("from")
 
-                if is_echo_message(msg_id) or msg_data.get("echo") or msg_from in [
-                    os.getenv("PHONE_NUMBER_ID"), os.getenv("WHATSAPP_BOT_NUMBER")
-                ]:
-                    save_sent_message_id(msg_id)
-                    return "ok"
+                    if is_echo_message(msg_id) or msg_data.get("echo") or msg_from in [
+                        os.getenv("PHONE_NUMBER_ID"), os.getenv("WHATSAPP_BOT_NUMBER")
+                    ]:
+                        save_sent_message_id(msg_id)
+                        return "ok"
 
-                phone = whatsapp.get_mobile(data)
-                name = whatsapp.get_name(data)
-                msg = whatsapp.get_message(data).strip()
+                    phone = whatsapp.get_mobile(data)
+                    name = whatsapp.get_name(data)
+                    msg = whatsapp.get_message(data).strip()
 
-                logger.info(f"Valid message from {phone}: {msg}")
+                    logger.info(f"Valid message from {phone}: {msg}")
 
-                session = load_session(phone)
-                if not session:
-                    initialize_session(phone, name)
-                    return jsonify({"status": "session initialized"}), 200
+                    session = load_session(phone)
+                    if not session:
+                        initialize_session(phone, name)
+                        return jsonify({"status": "session initialized"}), 200
 
-                if check_session_timeout(phone):
-                    return jsonify({"status": "session timeout"}), 200
+                    if check_session_timeout(phone):
+                        return jsonify({"status": "session timeout"}), 200
 
-                if msg.lower() == "cancel":
-                    cancel_session(phone)
-                    return jsonify({"status": "session cancelled"}), 200
+                    if msg.lower() == "cancel":
+                        cancel_session(phone)
+                        return jsonify({"status": "session cancelled"}), 200
 
-                session["last_active"] = datetime.now()
-                save_session(phone, session["step"], session["data"])
-                return handle_user_message(phone, msg, session)
+                    session["last_active"] = datetime.now()
+                    save_session(phone, session["step"], session["data"])
+                    return handle_user_message(phone, msg, session)
 
-            except Exception as e:
-                logger.error(f"❌ Error handling fallback webhook: {e}", exc_info=True)
-                return jsonify({"status": "error", "message": str(e)}), 500
+                except Exception as e:
+                    logger.error(f"❌ Error in fallback webhook logic: {e}", exc_info=True)
+                    return jsonify({"status": "error", "message": str(e)}), 500
+
+            else:
+                logger.warning("Received POST, but neither encrypted_flow_data nor WhatsApp entry was found.")
+                return jsonify({"status": "ignored", "message": "Not a supported POST type"}), 200
 
     except Exception as e:
-        logger.error(f"❌ Error processing webhook: {e}", exc_info=True)
+        logger.error(f"❌ Global error processing webhook: {e}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
