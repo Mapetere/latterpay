@@ -1,75 +1,86 @@
-import logging
-from datetime import datetime
-from services.sessions import (
-    get_user_step, update_user_step, get_user_registration,
-    update_session_data, save_registration_to_db
-)
+# services/registrationflow.py
+
+from services.sessions import save_session, update_last_active, cancel_session
 from services.pygwan_whatsapp import whatsapp
-from services.whatsappservice import WhatsAppService
 
-logger = logging.getLogger(__name__)
+step_handlers = {}
 
-class RegistrationFlow:
-    @staticmethod
-    def save_field(phone, field, value):
-        """Generic method to save registration field"""
-        update_session_data(phone, field, value if value.lower() != "skip" else "")
+def handle_message(phone, msg, session):
+    update_last_active(phone)
+    step = session.get("step", "awaiting_name")
+    handler = step_handlers.get(step)
+    if handler:
+        return handler(phone, msg, session)
+    else:
+        whatsapp.send_message("Oops! Something went wrong in registration. Let's start again.", phone)
+        session["step"] = "awaiting_name"
+        save_session(phone, session["step"], session["data"])
+        return handle_name_step(phone, msg, session)
 
-    @classmethod
-    def handle_message(cls, phone_number, message, session):
-        """Main handler for registration flow messages"""
-        step = get_user_step(phone_number)
-        logger.info(f"Registration flow - Step: {step}, Phone: {phone_number}")
+def handle_button_response(button_id, phone):
+    # Example: final confirm, skill type selection, etc.
+    if button_id == "confirm_registration":
+        whatsapp.send_message("🎉 You are now registered! Thank you.", phone)
+        cancel_session(phone)  # Clear the session
+        return True
+    return False
 
-        if step == "awaiting_name":
-            cls.save_field(phone_number, "name", message)
-            update_user_step(phone_number, "awaiting_surname")
-            whatsapp.send_message(phone_number, "Thanks! What's your *surname*?")
+def handle_name_step(phone, msg, session):
+    session["data"]["name"] = msg.strip().title()
+    session["step"] = "awaiting_email"
+    save_session(phone, session["step"], session["data"])
+    whatsapp.send_message("Great! Now, please enter your *email address*.", phone)
+    return "ok"
 
-        elif step == "awaiting_surname":
-            cls.save_field(phone_number, "surname", message)
-            update_user_step(phone_number, "awaiting_email")
-            whatsapp.send_message(phone_number, "Awesome! What's your *email*? (Or say 'skip')")
+def handle_email_step(phone, msg, session):
+    session["data"]["email"] = msg.strip()
+    session["step"] = "awaiting_area"
+    save_session(phone, session["step"], session["data"])
+    whatsapp.send_message("Enter your *area of residence* (e.g., Harare).", phone)
+    return "ok"
 
-        elif step == "awaiting_email":
-            cls.save_field(phone_number, "email", message)
-            update_user_step(phone_number, "awaiting_skill")
-            whatsapp.send_message(phone_number, "Noted. What's your *skill*?")
+def handle_area_step(phone, msg, session):
+    session["data"]["area"] = msg.strip().title()
+    session["step"] = "awaiting_skill"
+    save_session(phone, session["step"], session["data"])
+    whatsapp.send_message("Please enter your *main skill* or profession.", phone)
+    return "ok"
 
-        elif step == "awaiting_skill":
-            cls.save_field(phone_number, "skill", message)
-            update_user_step(phone_number, "awaiting_area")
-            WhatsAppService.send_interactive_buttons(phone_number, "volunteer_area")
+def handle_skill_step(phone, msg, session):
+    session["data"]["skill"] = msg.strip().title()
+    session["step"] = "awaiting_confirmation"
+    save_session(phone, session["step"], session["data"])
 
-        elif step == "completed":
-            whatsapp.send_message(phone_number, "✅ You are already registered!")
+    data = session["data"]
+    whatsapp.send_message(
+        f"🔍 *Review your registration details:*\n\n"
+        f"*Name:* {data.get('name')}\n"
+        f"*Email:* {data.get('email')}\n"
+        f"*Area:* {data.get('area')}\n"
+        f"*Skill:* {data.get('skill')}\n\n"
+        "Type *confirm* to finish or *cancel* to abort.",
+        phone
+    )
+    return "ok"
 
-    @classmethod
-    def handle_button_response(cls, button_id, phone_number):
-        """Handle button responses specific to registration"""
-        if button_id.startswith("area_"):
-            area = {
-                "area_carpentry": "Carpentry",
-                "area_building": "Building",
-                "area_software": "Software Development"
-            }.get(button_id, "Unknown")
+def handle_confirmation_step(phone, msg, session):
+    msg = msg.strip().lower()
+    if msg == "confirm":
+        from services.sessions import save_registration_to_db
+        save_registration_to_db(phone, **session["data"])
+        whatsapp.send_message("🎉 Registration complete. Thank you for registering!", phone)
+        cancel_session(phone)
+    elif msg == "cancel":
+        whatsapp.send_message("🚫 Registration cancelled. You can start again anytime.", phone)
+        cancel_session(phone)
+    else:
+        whatsapp.send_message("Please type *confirm* or *cancel*.", phone)
+    return "ok"
 
-            cls.save_field(phone_number, "area", area)
-            update_user_step(phone_number, "completed")
-
-            user_data = get_user_registration(phone_number)
-            save_registration_to_db(**user_data)
-
-            whatsapp.send_message(
-                phone_number,
-                f"✅ Thank you {user_data['name']}! You've been registered to help with *{area}*. "
-                "We'll be in touch soon. ❤️"
-            )
-            return True
-        return False
-
-    @classmethod
-    def start_registration(cls, phone_number):
-        """Initialize registration process"""
-        update_user_step(phone_number, "awaiting_name")
-        whatsapp.send_message(phone_number, "Great! 🏥 Let's get you registered.\nWhat's your *first name*?")
+step_handlers = {
+    "awaiting_name": handle_name_step,
+    "awaiting_email": handle_email_step,
+    "awaiting_area": handle_area_step,
+    "awaiting_skill": handle_skill_step,
+    "awaiting_confirmation": handle_confirmation_step
+}

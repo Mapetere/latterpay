@@ -185,8 +185,29 @@ def webhook_debug():
             phone = whatsapp.get_mobile(data)
             name = whatsapp.get_name(data)
             msg = whatsapp.get_message(data).strip()
+
+
             is_button = msg_data.get('type') == 'interactive' and msg_data.get('interactive', {}).get('type') == 'button_reply'
             button_id = msg_data.get('interactive', {}).get('button_reply', {}).get('id') if is_button else None
+
+            if is_button and button_id == "register_btn":
+                session = load_session(phone)
+                if not session:
+                    initialize_session(phone)
+
+                session = load_session(phone)
+                session["mode"] = "registration"
+                session["step"] = "awaiting_name"
+                save_session(phone, session["step"], session["data"])
+
+                whatsapp.send_message("📝 Let's get you registered!\n\nPlease enter your *full name* to begin.", phone)
+                return jsonify({"status": "registration started"}), 200
+
+
+
+
+
+            
 
             logger.info(f"Valid message received from {phone}: {msg} (is_button: {is_button}, button_id: {button_id})")
 
@@ -206,15 +227,16 @@ def webhook_debug():
             session["last_active"] = datetime.now()
             save_session(phone, session["step"], session["data"])
 
-            if session.get("mode") == "registration":
-                if is_button and button_id:
-                    if RegistrationFlow.handle_button_response(button_id, phone):
-                        return jsonify({"status": "registration completed"}), 200
-                RegistrationFlow.handle_message(phone, msg, session)
-                return jsonify({"status": "registration progress"}), 200
+            if button_id == "register_btn":
+                update_user_step(phone, "awaiting_name")
+                session["mode"] = "registration"
+                save_session(phone, "awaiting_name", session["data"])
+                RegistrationFlow.start_registration(phone)
+                return jsonify({"status": "registration started"}), 200
 
-            # Default to donation flow
-            return handle_user_message(phone, msg, session)
+            elif button_id == "payment_btn":
+
+                return handle_user_message(phone, msg, session)
 
     except Exception as e:
         logger.error(f"Message processing error: {str(e)}", exc_info=True)
