@@ -14,6 +14,8 @@ from services.pygwan_whatsapp import whatsapp
 from services.config import CUSTOM_TYPES_FILE, PAYMENTS_FILE
 from services.sessions import check_session_timeout, cancel_session, initialize_session,load_session,save_session
 from services.donationflow import handle_user_message
+from services.registrationflow import RegistrationFlow
+
 from services.sessions import monitor_sessions
 
 
@@ -142,6 +144,7 @@ def payment_result():
         logger.error(f"❌ Error handling Paynow result: {e}")
         return "ERROR", 500
 
+
 @latterpay.route("/webhook", methods=["GET", "POST"])
 def webhook_debug():
     try:
@@ -171,47 +174,46 @@ def webhook_debug():
             msg_id = msg_data.get("id")
             msg_from = msg_data.get("from")
 
-            if is_echo_message(msg_id) or msg_data.get("echo" ) or  message_exists(msg_id) or msg_from in [
+            if is_echo_message(msg_id) or msg_data.get("echo") or message_exists(msg_id) or msg_from in [
                 os.getenv("PHONE_NUMBER_ID"), os.getenv("WHATSAPP_BOT_NUMBER")
             ]:
                 logger.info("Echo/self message ignored.")
                 save_sent_message_id(msg_id)
                 return "ok"
 
-
-
-
-
-            
             phone = whatsapp.get_mobile(data)
             name = whatsapp.get_name(data)
             msg = whatsapp.get_message(data).strip()
+            is_button = msg_data.get('type') == 'interactive' and msg_data.get('interactive', {}).get('type') == 'button_reply'
+            button_id = msg_data.get('interactive', {}).get('button_reply', {}).get('id') if is_button else None
 
-            logger.info(f"Valid message received from {phone}: {msg}")
+            logger.info(f"Valid message received from {phone}: {msg} (is_button: {is_button}, button_id: {button_id})")
 
-            # Try to load an existing session from the my database2112211
             session = load_session(phone)
 
             if not session:
                 initialize_session(phone, name)
                 return jsonify({"status": "session initialized"}), 200
-            
 
             if check_session_timeout(phone):
                 return jsonify({"status": "session timeout"}), 200
-
 
             if msg.lower() == "cancel":
                 cancel_session(phone)
                 return jsonify({"status": "session cancelled"}), 200
 
-            # Update last_active timestamp in the database
             session["last_active"] = datetime.now()
-            save_session(phone, session["step"], session["data"])  
+            save_session(phone, session["step"], session["data"])
 
-            # Continue handling the message
+            if session.get("mode") == "registration":
+                if is_button and button_id:
+                    if RegistrationFlow.handle_button_response(button_id, phone):
+                        return jsonify({"status": "registration completed"}), 200
+                RegistrationFlow.handle_message(phone, msg, session)
+                return jsonify({"status": "registration progress"}), 200
+
+            # Default to donation flow
             return handle_user_message(phone, msg, session)
-
 
     except Exception as e:
         logger.error(f"Message processing error: {str(e)}", exc_info=True)
