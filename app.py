@@ -22,6 +22,10 @@ from Crypto.PublicKey import RSA
 import base64
 
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PRIVATE_KEY_PATH = os.path.join(BASE_DIR, "services", "private.pem")
+
+
 SCREEN_RESPONSES = {
     "PERSONAL_INFO": {
         "screen": "PERSONAL_INFO",
@@ -80,21 +84,58 @@ def decrypt_payload(encrypted_payload_base64, aes_key, iv):
 
 def decrypt_aes_key(encrypted_key_b64, private_key_path, passphrase):
     try:
+        logger.debug("🔐 Starting AES key decryption...")
+        logger.debug(f"🔐 Encrypted AES Key (raw input): {encrypted_key_b64}")
+
+        # Unescape slashes
         cleaned_key_b64 = encrypted_key_b64.replace("\\/", "/")
+        logger.debug(f"🔐 Cleaned Encrypted AES Key: {cleaned_key_b64}")
 
+        # Fix padding if missing
         missing_padding = len(cleaned_key_b64) % 4
-        if missing_padding != 0:
-            cleaned_key_b64 += '=' * (4 - missing_padding)
+        if missing_padding:
+            logger.warning(f"🔧 Base64 key is missing {4 - missing_padding} padding characters. Fixing...")
+            cleaned_key_b64 += "=" * (4 - missing_padding)
 
+        logger.debug(f"📏 Final key length: {len(cleaned_key_b64)}")
+        
+        # Decode base64
         encrypted_key_bytes = base64.b64decode(cleaned_key_b64)
+        logger.debug(f"🔓 Encrypted AES key (decoded bytes length): {len(encrypted_key_bytes)}")
+        logger.debug(f"🔓 Encrypted AES key (first 16 bytes): {encrypted_key_bytes[:16].hex()}...")
 
+        # Load private key
+        if not os.path.exists(private_key_path):
+            logger.error(f"❌ Private key file not found at: {private_key_path}")
+            raise FileNotFoundError("Private key file is missing.")
+        
+        logger.debug(f"🔑 Loading RSA private key from: {private_key_path}")
         with open(private_key_path, "rb") as key_file:
             private_key = RSA.import_key(key_file.read(), passphrase=passphrase)
 
+        logger.debug("🔑 RSA private key successfully loaded")
+
+        # Decrypt AES key using RSA
         cipher_rsa = PKCS1_OAEP.new(private_key)
         decrypted_key = cipher_rsa.decrypt(encrypted_key_bytes)
 
+        logger.info("✅ AES key successfully decrypted")
+        logger.debug(f"✅ AES key (hex): {decrypted_key.hex()}")
+
         return decrypted_key
+
+    except base64.binascii.Error as e:
+        logger.error("❌ Base64 decoding failed. Check if encrypted key is valid Base64.", exc_info=True)
+        raise
+
+    except ValueError as e:
+        logger.error("❌ RSA decryption failed. Possible wrong key or bad ciphertext.", exc_info=True)
+        raise
+
+    except Exception as e:
+        logger.error("❌ Unexpected error during AES key decryption.", exc_info=True)
+        raise
+
 
     except (ValueError, Exception) as e:
         logger.error("❌ Failed to decrypt AES key. Check base64 string or private key.", exc_info=True)
@@ -243,6 +284,9 @@ def webhook_debug():
 
                     if not (encrypted_data_b64 and encrypted_key_b64 and iv_b64):
                         return jsonify({"error": "Missing encryption fields"}), 400
+                    
+                    logger.debug(f"🔐 Encrypted AES key from request: {encrypted_key_b64}")
+                    logger.debug(f"🔐 IV from request: {iv_b64}")   
 
                     aes_key = decrypt_aes_key(
                         encrypted_key_b64,
@@ -347,17 +391,21 @@ if __name__ == "__main__":
     monitor_sessions()
     cleanup_message_ids()
 
-    encrypted_sample = "wXO2O...lLug=="
+    encrypted_sample = "Ye49YzFyx2w2Lzve6w/i/Ifp7BXJUWrbtBHVJXXxQznTzuYoPRoB6Kyp3yd1uEjX7S35jE1XwjKPcy3E7XhcCAxqwTwUD2r1bp6c1yfJJrM4NzaFbJw1WFoBTINKclkqqfuFLqCEIL3+70XooxS2HYKW5eYnyaD4F2Rm1x7TpjvLHs/ogExW5tFH05VrDyoy7DoJhK1YRyOqABJYR+dWWFMRJ/QOtaD6PS3AywzcS/l9NIFKtFRm1bbus4vxnctIUxQ/wFBCwqsLzGTXIxi33Ls3U4FbcIPPWArsnruyL1sgbB46Qpqi5t81R1foE3gRpWquhcZWqWCqMGH00BDfDQ=="
+    logger.debug(f"🔍 Absolute path to private key: {os.path.abspath(PRIVATE_KEY_PATH)}")
+
     try:
+        logger.info("🔍 Testing decryption of AES key sample on startup...")
         decrypted = decrypt_aes_key(
             encrypted_sample,
-            "private.pem",
+            PRIVATE_KEY_PATH,
             os.getenv("PRIVATE_KEY_PASSPHRASE")
         )
-        print("✅ Decrypted AES key:", decrypted.hex())
+        logger.info("✅ Decryption successful. AES key (hex): %s", decrypted.hex())
     except Exception as e:
-        print("❌ Failed to decrypt:", str(e))
+        logger.error("❌ Failed to decrypt on startup test: %s", str(e))
 
     port = int(os.environ.get("PORT", 8010))
-    logger.info(f"Starting server on port {port}")
+    logger.info(f"🚀 Starting server on port {port}")
     latterpay.run(host="0.0.0.0", port=port)
+
