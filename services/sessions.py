@@ -4,6 +4,7 @@ from datetime import timedelta
 from services.userstore import is_known_user, add_known_user
 from services.pygwan_whatsapp import whatsapp
 from datetime import datetime
+from services.whatsappservice import WhatsAppService
 import json
 import sqlite3
 from datetime import datetime, timedelta
@@ -124,26 +125,6 @@ def check_session_timeout(phone):
             return True
     return False
 
-def choice(phone,button_id):
-     # Create new session object
-    session_data = {
-        "step": "name",
-        "data": {},
-        "last_active": datetime.now().isoformat()
-    }
-
-    save_session(phone, session_data["step"], session_data["data"])
-
-
-    if not is_known_user(phone):
-        whatsapp.send_message("Hello! I'm latterpay. How can I assist you today?",phone)
-        WhatsAppService.send_initial_message(phone, is_new)
-
-
-    else:
-        whatsapp.send_message("Welcome back! How can I be of assistance this time?",phone)
-        WhatsAppService.send_initial_message(phone, is_new)
-
 
 def initialize_session(phone, name="there"):
     print(f"\nCreating NEW session for {phone} ({name})")
@@ -159,13 +140,13 @@ def initialize_session(phone, name="there"):
 
     if not is_known_user(phone):
         whatsapp.send_message(
-            "Let’s get started. Please enter the *full name* of the person making the payment.",
+            " Let’s get started. Please enter the *full name* of the person making the payment.",
             phone
         )
         add_known_user(phone)
     else:
         whatsapp.send_message(
-            "Back for another donation? Please enter the *name of the person* making this payment.",
+            "Welcome back! Please enter the *name of the person* making this payment.",
             phone
         )
 
