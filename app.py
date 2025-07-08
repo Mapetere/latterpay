@@ -391,20 +391,6 @@ if __name__ == "__main__":
     monitor_sessions()
     cleanup_message_ids()
 
-    encrypted_sample = "Ye49YzFyx2w2Lzve6w/i/Ifp7BXJUWrbtBHVJXXxQznTzuYoPRoB6Kyp3yd1uEjX7S35jE1XwjKPcy3E7XhcCAxqwTwUD2r1bp6c1yfJJrM4NzaFbJw1WFoBTINKclkqqfuFLqCEIL3+70XooxS2HYKW5eYnyaD4F2Rm1x7TpjvLHs/ogExW5tFH05VrDyoy7DoJhK1YRyOqABJYR+dWWFMRJ/QOtaD6PS3AywzcS/l9NIFKtFRm1bbus4vxnctIUxQ/wFBCwqsLzGTXIxi33Ls3U4FbcIPPWArsnruyL1sgbB46Qpqi5t81R1foE3gRpWquhcZWqWCqMGH00BDfDQ=="
-    logger.debug(f"🔍 Absolute path to private key: {os.path.abspath(PRIVATE_KEY_PATH)}")
-
-    try:
-        logger.info("🔍 Testing decryption of AES key sample on startup...")
-        decrypted = decrypt_aes_key(
-            encrypted_sample,
-            PRIVATE_KEY_PATH,
-            os.getenv("PRIVATE_KEY_PASSPHRASE")
-        )
-        logger.info("✅ Decryption successful. AES key (hex): %s", decrypted.hex())
-    except Exception as e:
-        logger.error("❌ Failed to decrypt on startup test: %s", str(e))
-
     port = int(os.environ.get("PORT", 8010))
     logger.info(f"🚀 Starting server on port {port}")
     latterpay.run(host="0.0.0.0", port=port)
