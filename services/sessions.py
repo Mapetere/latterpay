@@ -255,3 +255,29 @@ def update_session_data(phone, key, value):
     cursor.execute("UPDATE sessions SET data = ?, last_active = CURRENT_TIMESTAMP WHERE phone = ?", (updated_data, phone))
     conn.commit()
     conn.close()
+
+
+# Add these functions to your existing sessions.py
+
+def get_user_registration(phone):
+    """Get complete registration data for a user"""
+    session = load_session(phone)
+    if not session:
+        return None
+    return session.get("data", {})
+
+def save_registration_to_db(phone, **data):
+    """Save registration data to permanent storage"""
+    # Implement your database saving logic here
+    # Example:
+    conn = sqlite3.connect("botdata.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT OR REPLACE INTO registrations 
+        (phone, name, surname, email, skill, area, registered_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (phone, data.get('name'), data.get('surname'), 
+         data.get('email'), data.get('skill'), data.get('area'), 
+         datetime.now()))
+    conn.commit()
+    conn.close()
