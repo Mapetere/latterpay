@@ -79,11 +79,27 @@ def decrypt_payload(encrypted_payload_base64, aes_key, iv):
     return decrypted_data.decode("utf-8")
 
 def decrypt_aes_key(encrypted_key_b64, private_key_path, passphrase):
-    with open(private_key_path, "rb") as key_file:
-        private_key = RSA.import_key(key_file.read(), passphrase=passphrase)
+    try:
+        cleaned_key_b64 = encrypted_key_b64.replace("\\/", "/")
+
+        missing_padding = len(cleaned_key_b64) % 4
+        if missing_padding != 0:
+            cleaned_key_b64 += '=' * (4 - missing_padding)
+
+        encrypted_key_bytes = base64.b64decode(cleaned_key_b64)
+
+        with open(private_key_path, "rb") as key_file:
+            private_key = RSA.import_key(key_file.read(), passphrase=passphrase)
+
         cipher_rsa = PKCS1_OAEP.new(private_key)
-        decrypted_key = cipher_rsa.decrypt(base64.b64decode(encrypted_key_b64))
+        decrypted_key = cipher_rsa.decrypt(encrypted_key_bytes)
+
         return decrypted_key
+
+    except (ValueError, Exception) as e:
+        logger.error("❌ Failed to decrypt AES key. Check base64 string or private key.", exc_info=True)
+        raise
+
 
 def re_encrypt_payload(plaintext, aes_key, iv):
     cipher_aes = AES.new(aes_key, AES.MODE_CBC, iv)
@@ -242,6 +258,8 @@ def webhook_debug():
                     logger.info(f"Decrypted Meta flow data: {decrypted_data}")
                     action = decrypted_data.get("action")
                     flow_token = decrypted_data.get("flow_token", "UNKNOWN")
+                    logger.debug(f"🔐 Encrypted AES key (raw): {data.get('encrypted_aes_key')}")
+
 
                     if action == "INIT":
                         response = SCREEN_RESPONSES["PERSONAL_INFO"]
@@ -328,6 +346,18 @@ if __name__ == "__main__":
     init_db()
     monitor_sessions()
     cleanup_message_ids()
+
+    encrypted_sample = "wXO2O...lLug=="
+    try:
+        decrypted = decrypt_aes_key(
+            encrypted_sample,
+            "private.pem",
+            os.getenv("PRIVATE_KEY_PASSPHRASE")
+        )
+        print("✅ Decrypted AES key:", decrypted.hex())
+    except Exception as e:
+        print("❌ Failed to decrypt:", str(e))
+
     port = int(os.environ.get("PORT", 8010))
     logger.info(f"Starting server on port {port}")
     latterpay.run(host="0.0.0.0", port=port)
