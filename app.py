@@ -226,13 +226,19 @@ def webhook_debug():
                         param = decrypted_data.get("data", {}).get("some_param", "VOLUNTEER_OPTION_1")
                         response = SCREEN_RESPONSES["SUCCESS"](flow_token, param)
                     elif action == "BACK":
-                        response = SCREEN_RESPONSES.get("SUMMARY")
+                       # Safe fallback logic
+                        response = SCREEN_RESPONSES.get("SUMMARY", {"screen": "SUMMARY", "data": {}})
+
                     else:
                         logger.warning(f"Unknown action received: {action}")
-                        response = SCREEN_RESPONSES.get("TERMS")
+                        response = SCREEN_RESPONSES.get("TERMS", {"screen": "TERMS", "data": {}})
+
 
                     encrypted_response = re_encrypt_payload(json.dumps(response), aes_key, iv)
-                    return jsonify({"encrypted_flow_data": encrypted_response})
+                    return encrypted_response, 200, {
+                                "Content-Type": "text/plain"
+                            }
+
 
                 except Exception as e:
                     logger.error(f"❌ Error handling encrypted webhook: {e}", exc_info=True)
