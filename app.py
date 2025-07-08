@@ -255,7 +255,7 @@ def webhook_debug():
                     logger.error(f"❌ Error in encrypted flow logic: {e}", exc_info=True)
                     return jsonify({"status": "error", "message": str(e)}), 500
 
-            # 💬 Regular WhatsApp fallback webhook logic
+
             elif "entry" in data:
                 try:
                     entry = data.get("entry", [{}])[0]
