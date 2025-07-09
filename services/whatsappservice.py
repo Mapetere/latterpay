@@ -49,3 +49,17 @@ class WhatsAppService:
             raise Exception(f"Invalid JSON in template: {template_path}")
         except requests.RequestException as e:
             raise Exception(f"API request failed: {str(e)}")
+        
+
+    # services/whatsapp_menu.py
+
+from services.pygwan_whatsapp import WhatsAppService
+
+def send_main_menu(phone):
+    try:
+        return WhatsAppService.send_interactive_buttons(
+            phone_number=phone,
+            template_name="main_menu"
+        )
+    except Exception as e:
+        print(f"❌ Failed to send main menu: {e}")
