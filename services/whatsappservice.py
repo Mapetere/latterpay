@@ -1,8 +1,21 @@
 import os
+import sys
 import json
 from pathlib import Path
 import requests
 from dotenv import load_dotenv
+import logging
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('app.log')
+    ]
+)
+logger = logging.getLogger(__name__)
+
 
 load_dotenv()  
 
@@ -56,19 +69,36 @@ class WhatsAppService:
 # services/whatsapp_menu.py
 from services.pygwan_whatsapp import whatsapp  # This should be the WhatsApp instance
 
+# services/whatsapp_menu.py
+
+from services.pygwan_whatsapp import whatsapp
+
 def send_main_menu(phone):
     try:
+        logger.info(f"Sending pygwan button menu to {phone}")
         menu = {
             "header": "📍 Main Menu",
             "body": "Hi there! 👋\nPlease choose an option below:",
             "footer": "LatterPay Bot",
             "action": {
                 "buttons": [
-                    {"type": "reply", "reply": {"id": "register_btn", "title": "📝 Register"}},
-                    {"type": "reply", "reply": {"id": "payment_btn", "title": "💸 Donate"}}
+                    {
+                        "type": "reply",
+                        "reply": {
+                            "id": "register_btn",
+                            "title": "📝 Register for Runde Rural Clinic Project"
+                        }
+                    },
+                    {
+                        "type": "reply",
+                        "reply": {
+                            "id": "payment_btn",
+                            "title": "💸 Make Payment"
+                        }
+                    }
                 ]
             }
         }
-        return whatsapp.send_button(menu, phone)
+        whatsapp.send_button(menu, phone)
     except Exception as e:
-        print(f"❌ Failed to send main menu: {e}")
+        logger.error(f"❌ Failed to send pygwan menu to {phone}: {e}")
