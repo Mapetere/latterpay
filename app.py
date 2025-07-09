@@ -210,6 +210,8 @@ def webhook_debug():
             if not is_button:
                 logger.info("📋 Sending main menu")
                 send_main_menu(phone)
+                logger.info("📋 Sending pygwan-powered main menu.")
+
                 return jsonify({"status": "menu sent"}), 200
 
             if session and session.get("mode") == "registration":

@@ -53,11 +53,22 @@ class WhatsAppService:
 
     # services/whatsapp_menu.py
 
+# services/whatsapp_menu.py
+from services.pygwan_whatsapp import whatsapp  # This should be the WhatsApp instance
+
 def send_main_menu(phone):
     try:
-        return WhatsAppService.send_interactive_buttons(
-            phone_number=phone,
-            template_name="main_menu"
-        )
+        menu = {
+            "header": "📍 Main Menu",
+            "body": "Hi there! 👋\nPlease choose an option below:",
+            "footer": "LatterPay Bot",
+            "action": {
+                "buttons": [
+                    {"type": "reply", "reply": {"id": "register_btn", "title": "📝 Register"}},
+                    {"type": "reply", "reply": {"id": "payment_btn", "title": "💸 Donate"}}
+                ]
+            }
+        }
+        return whatsapp.send_button(menu, phone)
     except Exception as e:
         print(f"❌ Failed to send main menu: {e}")
