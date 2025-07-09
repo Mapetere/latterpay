@@ -53,8 +53,6 @@ class WhatsAppService:
 
     # services/whatsapp_menu.py
 
-from services.pygwan_whatsapp import WhatsAppService
-
 def send_main_menu(phone):
     try:
         return WhatsAppService.send_interactive_buttons(

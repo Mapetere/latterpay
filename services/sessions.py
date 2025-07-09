@@ -2,7 +2,6 @@
 from datetime import datetime
 from datetime import timedelta
 from services.userstore import is_known_user, add_known_user
-from services.pygwan_whatsapp import whatsapp
 from datetime import datetime
 from services.whatsappservice import WhatsAppService
 import json
@@ -10,7 +9,6 @@ import sqlite3
 from datetime import datetime, timedelta
 import threading
 import time
-from services.pygwan_whatsapp import whatsapp
 
 import time
 
