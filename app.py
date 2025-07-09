@@ -1,27 +1,27 @@
-from flask import Flask, request, jsonify
-from datetime import datetime
 import os
 import json
 import sqlite3
-from sqlite3 import OperationalError
-from paynow import Paynow
 import sys
 import time
 import logging
-from dotenv import load_dotenv
 import threading
+from datetime import datetime
+from flask import Flask, request, jsonify
+from dotenv import load_dotenv
 from services.pygwan_whatsapp import whatsapp
 from services.config import CUSTOM_TYPES_FILE, PAYMENTS_FILE
-from services.sessions import check_session_timeout, cancel_session, initialize_session,load_session,save_session,update_user_step
+from services.sessions import (
+    check_session_timeout, cancel_session, initialize_session,
+    load_session, save_session, update_user_step, monitor_sessions
+)
 from services.donationflow import handle_user_message
 from services.registrationflow import RegistrationFlow
+from services.whatsappservice import send_main_menu
 
-from services.sessions import monitor_sessions
+# Load environment variables
+load_dotenv()
 
-
-
-
-
+# Logging setup
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -32,41 +32,32 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Initialize Flask
+latterpay = Flask(__name__)
 
-load_dotenv()
-
-
+# Ensure files exist
 for file_path in [CUSTOM_TYPES_FILE, PAYMENTS_FILE]:
     if not os.path.exists(file_path):
         with open(file_path, 'w') as f:
             json.dump([], f)
 
-latterpay = Flask(__name__)
-
-
-
-
+# Database initialization
 def init_db():
     conn = sqlite3.connect("botdata.db", timeout=10)
     cursor = conn.cursor()
 
-    # Sent Messages Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sent_messages (
             msg_id TEXT PRIMARY KEY,
             sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-
-    # Known Users Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS known_users (
             phone TEXT PRIMARY KEY,
             first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-
-    # Sessions Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sessions (
             phone TEXT PRIMARY KEY,
@@ -75,20 +66,17 @@ def init_db():
             last_active TIMESTAMP
         )
     """)
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS registrations (
-                   phone TEXT PRIMARY KEY ,
-                   name TEXT,
-                   surname TEXT,
-                   email TEXT,
-                   skill TEXT,
-                   area TEXT,
-                   registered_at  TIMESTAMP)
-                   
-                   
-                   """)
-    # Safely added the  'warned' column if it doesn't exist
+            phone TEXT PRIMARY KEY,
+            name TEXT,
+            surname TEXT,
+            email TEXT,
+            skill TEXT,
+            area TEXT,
+            registered_at TIMESTAMP
+        )
+    """)
     cursor.execute("PRAGMA table_info(sessions)")
     columns = [col[1] for col in cursor.fetchall()]
     if "warned" not in columns:
@@ -97,7 +85,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-
+# Echo message check
 def is_echo_message(msg_id):
     conn = sqlite3.connect("botdata.db", timeout=10)
     cursor = conn.cursor()
@@ -120,23 +108,18 @@ def delete_old_ids():
     conn.commit()
     conn.close()
 
-def message_exists(msg_id):
-    return is_echo_message(msg_id)
-
-
 def cleanup_message_ids():
     def cleaner():
         while True:
             try:
                 delete_old_ids()
-                time.sleep(3600)  # every 10 minutes
+                time.sleep(3600)
             except Exception as e:
                 logger.warning(f"[CLEANUP ERROR] {e}")
                 time.sleep(600)
-
     threading.Thread(target=cleaner, daemon=True).start()
 
-
+# Routes
 @latterpay.route("/")
 def home():
     logger.info("Home endpoint accessed")
@@ -150,13 +133,11 @@ def payment_return():
 def payment_result():
     try:
         raw_data = request.data.decode("utf-8")
-        logger.info("Paynow Result Received: \n" + raw_data)
+        logger.info("Paynow Result Received:\n" + raw_data)
         return "OK"
     except Exception as e:
         logger.error(f"❌ Error handling Paynow result: {e}")
         return "ERROR", 500
-
-
 
 @latterpay.route("/webhook", methods=["GET", "POST"])
 def webhook_debug():
@@ -170,9 +151,13 @@ def webhook_debug():
             return "Verification failed", 403
 
         if request.method == "POST":
+            raw_body = request.data.decode("utf-8")
+            logger.debug(f"📥 Raw POST body:\n{raw_body}")
             data = request.get_json(force=True, silent=True)
+            logger.debug(f"📦 Parsed JSON:\n{json.dumps(data, indent=2)}")
+
             if not data:
-                logger.error("No valid JSON data received.")
+                logger.error("❌ No valid JSON data received.")
                 return jsonify({"status": "error", "message": "No data"}), 400
 
             entry = data.get("entry", [{}])[0]
@@ -181,35 +166,35 @@ def webhook_debug():
             msg_data = value.get("messages", [{}])[0] if value.get("messages") else None
 
             if not msg_data:
-                logger.info("No user message detected. Ignored.")
+                logger.info("⚠️ 'messages' missing or empty in incoming payload.")
                 return "ok"
 
             msg_id = msg_data.get("id")
             msg_from = msg_data.get("from")
 
-            if is_echo_message(msg_id) or msg_data.get("echo") or message_exists(msg_id) or msg_from in [
+            if is_echo_message(msg_id) or msg_data.get("echo") or msg_from in [
                 os.getenv("PHONE_NUMBER_ID"), os.getenv("WHATSAPP_BOT_NUMBER")
             ]:
-                logger.info("Echo/self message ignored.")
+                logger.info("🔁 Echo/self message ignored.")
                 save_sent_message_id(msg_id)
                 return "ok"
 
             phone = whatsapp.get_mobile(data)
             name = whatsapp.get_name(data)
             msg = whatsapp.get_message(data).strip()
+            logger.info(f"📲 Message received from {phone}: '{msg}'")
 
             is_button = msg_data.get('type') == 'interactive' and msg_data.get('interactive', {}).get('type') == 'button_reply'
             button_id = msg_data.get('interactive', {}).get('button_reply', {}).get('id') if is_button else None
 
             session = load_session(phone)
 
-            # Handle button click
             if is_button:
+                logger.info(f"🔘 Button clicked: {button_id}")
                 if button_id == "register_btn":
                     if not session:
                         initialize_session(phone)
                         session = load_session(phone)
-
                     session["mode"] = "registration"
                     session["step"] = "awaiting_name"
                     save_session(phone, session["step"], session["data"])
@@ -220,22 +205,17 @@ def webhook_debug():
                     if not session:
                         initialize_session(phone, name)
                         session = load_session(phone)
-
                     return handle_user_message(phone, msg, session)
 
-            # If it's not a button, show menu (for everyone: new or returning)
             if not is_button:
-                from services.whatsappservice import send_main_menu
+                logger.info("📋 Sending main menu")
                 send_main_menu(phone)
                 return jsonify({"status": "menu sent"}), 200
 
-
-            # Handle registration message flow
             if session and session.get("mode") == "registration":
                 from services.registrationflow import handle_registration_message
                 return handle_registration_message(phone, msg, session)
 
-            # Donation fallback
             if not session:
                 initialize_session(phone, name)
                 return jsonify({"status": "session initialized"}), 200
@@ -253,14 +233,13 @@ def webhook_debug():
             return handle_user_message(phone, msg, session)
 
     except Exception as e:
-        logger.error(f"Message processing error: {str(e)}", exc_info=True)
+        logger.error(f"❌ Message processing error: {str(e)}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
+# Main entry
 if __name__ == "__main__":
     init_db()
     monitor_sessions()
-
     port = int(os.environ.get("PORT", 8010))
-    logger.info(f"Starting server on port {port}")
+    logger.info(f"🚀 Starting server on port {port}")
     latterpay.run(host="0.0.0.0", port=port)
