@@ -76,29 +76,44 @@ from services.pygwan_whatsapp import whatsapp
 def send_main_menu(phone):
     try:
         logger.info(f"Sending pygwan button menu to {phone}")
-        menu = {
-            "header": "📍 Main Menu",
-            "body": "Hi there! 👋\nPlease choose an option below:",
-            "footer": "LatterPay Bot",
-            "action": {
-                "buttons": [
-                    {
-                        "type": "reply",
-                        "reply": {
-                            "id": "register_btn",
-                            "title": "📝 Register for Runde Rural Clinic Project"
+
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": phone,
+            "type": "interactive",
+            "interactive": {
+                "type": "button",
+                "header": {
+                    "type": "text",
+                    "text": "📍 Main Menu"
+                },
+                "body": {
+                    "text": "Hi there! 👋\nPlease choose an option below:"
+                },
+                "footer": {
+                    "text": "LatterPay Bot"
+                },
+                "action": {
+                    "buttons": [
+                        {
+                            "type": "reply",
+                            "reply": {
+                                "id": "register_btn",
+                                "title": "📝 Register"
+                            }
+                        },
+                        {
+                            "type": "reply",
+                            "reply": {
+                                "id": "payment_btn",
+                                "title": "💸 Make payment"
+                            }
                         }
-                    },
-                    {
-                        "type": "reply",
-                        "reply": {
-                            "id": "payment_btn",
-                            "title": "💸 Make Payment"
-                        }
-                    }
-                ]
+                    ]
+                }
             }
         }
-        whatsapp.send_button(menu, phone)
+
+        whatsapp.send_button(payload, phone)
     except Exception as e:
         logger.error(f"❌ Failed to send pygwan menu to {phone}: {e}")
