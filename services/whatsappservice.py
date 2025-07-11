@@ -73,47 +73,36 @@ from services.pygwan_whatsapp import whatsapp  # This should be the WhatsApp ins
 
 from services.pygwan_whatsapp import whatsapp
 
+
 def send_main_menu(phone):
     try:
-        logger.info(f"Sending pygwan button menu to {phone}")
-
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": phone,
-            "type": "interactive",
-            "interactive": {
-                "type": "button",
-                "header": {
-                    "type": "text",
-                    "text": "📍 Main Menu"
-                },
-                "body": {
-                    "text": "Hi there! 👋\nPlease choose an option below:"
-                },
-                "footer": {
-                    "text": "LatterPay Bot"
-                },
-                "action": {
-                    "buttons": [
-                        {
-                            "type": "reply",
-                            "reply": {
-                                "id": "register_btn",
-                                "title": "📝 Register"
-                            }
-                        },
-                        {
-                            "type": "reply",
-                            "reply": {
-                                "id": "payment_btn",
-                                "title": "💸 Make payment"
-                            }
+        greeting = "Good day"
+    
+        button_payload = {
+            "type": "button",
+            "body": {
+                "text": f"{greeting}\n\nSelect how I may help you today:"
+            },
+            "action": {
+                "buttons": [
+                    {
+                        "type": "reply",
+                        "reply": {
+                            "id": "register_clinic",
+                            "title": "Register to Runde Rural Clinic"
                         }
-                    ]
-                }
+                    },
+                    {
+                        "type": "reply",
+                        "reply": {
+                            "id": "make_payment",
+                            "title": "Make a payment"
+                        }
+                    }
+                ]
             }
         }
 
-        whatsapp.send_button(payload, phone)
+        return whatsapp.send_interactive_buttons(phone, button_payload)
     except Exception as e:
         logger.error(f"❌ Failed to send pygwan menu to {phone}: {e}")
