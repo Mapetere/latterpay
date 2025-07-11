@@ -76,7 +76,7 @@ from services.pygwan_whatsapp import whatsapp
 
 def send_main_menu(phone):
     try:
-        greeting = "Good day"
+        greeting = "Good da"
     
         button_payload = {
             "type": "button",
@@ -103,6 +103,15 @@ def send_main_menu(phone):
             }
         }
 
-        return whatsapp.send_interactive_buttons(phone, button_payload)
+        data = {
+            "messaging_product": "whatsapp",
+            "to": phone,
+            "type": "interactive",
+            "interactive": button_payload
+        }
+
+        # Send the message
+        response = whatsapp.send_button(button_payload, phone)
+        return response
     except Exception as e:
         logger.error(f"❌ Failed to send pygwan menu to {phone}: {e}")
