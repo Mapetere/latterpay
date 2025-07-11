@@ -76,42 +76,34 @@ from services.pygwan_whatsapp import whatsapp
 
 def send_main_menu(phone):
     try:
-        greeting = "Good da"
-    
         button_payload = {
-            "type": "button",
-            "body": {
-                "text": f"{greeting}\n\nSelect how I may help you today:"
-            },
+            "header": "Good day!",  # Optional header
+            "body": "Select how I may help you today:",  # REQUIRED string (not dict!)
+            "footer": "Runde Rural Clinic",  # Optional footer
             "action": {
-                "buttons": [
+                "buttons": [  # List of buttons (max 3)
                     {
                         "type": "reply",
                         "reply": {
                             "id": "register_clinic",
-                            "title": "Register to Runde Rural Clinic"
+                            "title": "Register to Runde Rural Clinic"  # Max 20 chars
                         }
                     },
                     {
                         "type": "reply",
                         "reply": {
                             "id": "make_payment",
-                            "title": "Make a payment"
+                            "title": "Make a payment"  # Max 20 chars
                         }
                     }
                 ]
             }
         }
 
-        data = {
-            "messaging_product": "whatsapp",
-            "to": phone,
-            "type": "interactive",
-            "interactive": button_payload
-        }
-
-        # Send the message
-        response = whatsapp.send_button(button_payload, phone)
+        response = whatsapp.send_button(
+            button=button_payload,
+            recipient_id=phone
+        )
         return response
     except Exception as e:
         logger.error(f"❌ Failed to send pygwan menu to {phone}: {e}")
