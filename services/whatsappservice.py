@@ -53,7 +53,7 @@ class WhatsAppService:
                 json=payload
             )
             
-            response.raise_for_status()  # Raise exception for bad status codes
+            response.raise_for_status()  
             return response.json()
             
         except FileNotFoundError:
@@ -64,12 +64,10 @@ class WhatsAppService:
             raise Exception(f"API request failed: {str(e)}")
         
 
-    # services/whatsapp_menu.py
 
-# services/whatsapp_menu.py
-from services.pygwan_whatsapp import whatsapp  # This should be the WhatsApp instance
+from services.pygwan_whatsapp import whatsapp 
 
-# services/whatsapp_menu.py
+
 
 from services.pygwan_whatsapp import whatsapp
 
@@ -77,23 +75,23 @@ from services.pygwan_whatsapp import whatsapp
 def send_main_menu(phone):
     try:
         button_payload = {
-            "header": "Good day!",  # Optional header
-            "body": "Select how I may help you today:",  # REQUIRED string (not dict!)
-            "footer": "Runde Rural Clinic",  # Optional footer
+            "header": "Good day!",  
+            "body": "Select how I may help you today:",  
+            "footer": "Runde Rural Clinic Project",  
             "action": {
-                "buttons": [  # List of buttons (max 3)
+                "buttons": [  
                     {
                         "type": "reply",
                         "reply": {
                             "id": "register_clinic",
-                            "title": "Register to Runde Rural Clinic"  # Max 20 chars
+                            "title": "Register to Runde Rural Clinic"  
                         }
                     },
                     {
                         "type": "reply",
                         "reply": {
                             "id": "make_payment",
-                            "title": "Make a payment"  # Max 20 chars
+                            "title": "Make a payment"  
                         }
                     }
                 ]
