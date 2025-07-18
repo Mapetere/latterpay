@@ -8,7 +8,7 @@ from services.sessions import save_session
 class RegistrationFlow:
     @staticmethod
     def start_registration(phone):
-        whatsapp.send_message("📝 Registration started.\n" \
+        whatsapp.send_message("Registration started.\n" \
         " What's your full name?", phone)
         session = {"mode": "registration", "step": "awaiting_name", "data": {}}
         save_session(phone, session["step"], session["data"])
@@ -30,10 +30,9 @@ def handle_registration_message(phone, msg, session):
 
 
 def handle_button_response(button_id, phone):
-    # Example: final confirm, skill type selection, etc.
     if button_id == "confirm_registration":
-        whatsapp.send_message("🎉 You are now registered! Thank you.", phone)
-        cancel_session(phone)  # Clear the session
+        whatsapp.send_message("🎉 You are now registered! Thank you for using latterpay.", phone)
+        cancel_session(phone)  
         return True
     return False
 
