@@ -5,6 +5,7 @@ from services.pygwan_whatsapp import whatsapp
 from services.pygwan_whatsapp import whatsapp
 from services.sessions import save_session
 
+
 class RegistrationFlow:
     @staticmethod
     def start_registration(phone):
@@ -14,6 +15,7 @@ class RegistrationFlow:
         save_session(phone, session["step"], session["data"])
 
 step_handlers = {}
+
 
 def handle_registration_message(phone, msg, session):
     
@@ -29,12 +31,14 @@ def handle_registration_message(phone, msg, session):
         return handle_name_step(phone, msg, session)
 
 
+
 def handle_button_response(button_id, phone):
     if button_id == "confirm_registration":
         whatsapp.send_message("🎉 You are now registered! Thank you for using latterpay.", phone)
         cancel_session(phone)  
         return True
     return False
+
 
 def handle_name_step(phone, msg, session):
     session["data"]["name"] = msg.strip().title()
@@ -43,6 +47,7 @@ def handle_name_step(phone, msg, session):
     whatsapp.send_message("Great! Now, please enter your *email address*.", phone)
     return "ok"
 
+
 def handle_email_step(phone, msg, session):
     session["data"]["email"] = msg.strip()
     session["step"] = "awaiting_area"
@@ -50,12 +55,14 @@ def handle_email_step(phone, msg, session):
     whatsapp.send_message("Enter your *area of residence* (e.g., Harare).", phone)
     return "ok"
 
+
 def handle_area_step(phone, msg, session):
     session["data"]["area"] = msg.strip().title()
     session["step"] = "awaiting_skill"
     save_session(phone, session["step"], session["data"])
     whatsapp.send_message("Please enter your *main skill* or profession.", phone)
     return "ok"
+
 
 def handle_skill_step(phone, msg, session):
     session["data"]["skill"] = msg.strip().title()
