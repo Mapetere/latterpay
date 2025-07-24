@@ -201,9 +201,6 @@ def webhook_debug():
                 "2️⃣ Make payment\n\n"
                 "Please reply with a number", phone)
                 session = load_session(phone)
-                session["mode"] = "registration"
-                session["step"] = "awaiting_name"
-
                 save_session(phone, session["step"], session["data"])
                 
 
