@@ -195,7 +195,6 @@ def webhook_debug():
 
 
             if not session:
-                initialize_session(phone, name)
                 whatsapp.send_message(
                 " Welcome! What would you like to do?\n\n"
                 "1️⃣ Register to Runde Rural Clinic Project\n"
@@ -214,13 +213,16 @@ def webhook_debug():
             if check_session_timeout(phone):
                 return jsonify({"status": "session timeout"}), 200
 
+
             if msg.lower() == "cancel":
                 cancel_session(phone)
                 return jsonify({"status": "session cancelled"}), 200
 
+
             session["last_active"] = datetime.now()
             save_session(phone, session["step"], session["data"])
-            
+
+
             if msg == "1":
                 session["mode"] = "registration"
                 session["step"] = "awaiting_name"
