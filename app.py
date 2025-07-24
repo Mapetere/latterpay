@@ -157,46 +157,82 @@ def webhook_debug():
                 return challenge, 200
             return "Verification failed", 403
 
-        if request.method == "POST":
-            data = request.get_json(force=True, silent=True)
-            if not data:
-                logger.error("No valid JSON data received.")
-                return jsonify({"status": "error", "message": "No data"}), 400
+        elif request.method == "POST":
+            data = None
 
-            entry = data.get("entry", [{}])[0]
-            changes = entry.get("changes", [{}])[0]
-            value = changes.get("value", {})
-            msg_data = value.get("messages", [{}])[0] if value.get("messages") else None
+            if request.is_json:
+                data = request.get_json()
 
-            if not msg_data:
-                logger.info("No user message detected. Ignored.")
-                return "ok"
+                try:
+                    changes = data["entry"][0]["changes"][0]["value"]
+                    msg_data = changes.get("messages", [])[0]  # Might be empty if it's not a user message
 
-            msg_id = msg_data.get("id")
-            msg_from = msg_data.get("from")
+                    if not msg_data:
+                        return "ok"
 
-            if is_echo_message(msg_id) or msg_data.get("echo") or message_exists(msg_id) or msg_from in [
-                os.getenv("PHONE_NUMBER_ID"), os.getenv("WHATSAPP_BOT_NUMBER")
-            ]:
-                logger.info("Echo/self message ignored.")
-                save_sent_message_id(msg_id)
-                return "ok"
+                    msg_id = msg_data.get("id")
+                    msg_from = msg_data.get("from")
 
-            phone = whatsapp.get_mobile(data)
-            name = whatsapp.get_name(data)
-            msg = whatsapp.get_message(data).strip()
+                    # ✨ Echo check using message ID
+                    if is_echo_message(msg_id):
+                        print("🔁 Detected echo via DB. Ignoring.")
+                        return "ok"
+
+                    # Optional: echo fallback checks
+                    if msg_data.get("echo"):
+                        print("🔁 Detected echo=True. Ignoring.")
+                        return "ok"
+
+                    if msg_from == os.getenv("PHONE_NUMBER_ID") or msg_from == os.getenv("WHATSAPP_BOT_NUMBER"):
+                        print("🔁 Message from own bot. Ignored.")
+                        return "ok"
+
+                    print("✅ Valid message received:", msg_data.get("text", {}).get("body"))
+                    # Proceed with your session logic here...
+
+                except (KeyError, IndexError, OperationalError) as e:
+                    logging.error(f"Error processing webhook: {e}")
+                    return "ok"
+
+            else:
+                try:
+                    raw_data = request.data.decode("utf-8")
+                    logging.info(f"Incoming RAW POST data: {raw_data}")
+                    data = json.loads(raw_data)
+
+                except Exception as decode_err:
+                    logging.error(f"Failed to decode raw POST data: {decode_err}")
+                    return jsonify({"status": "error", "message": "Invalid raw JSON"}), 400
 
 
+            if data.get("type") == "DEPLOY":
+                logging.info("Received Railway deployment notification")
+                return jsonify({"status": "ignored"}), 200
 
 
+            if isinstance(data, dict) and data.get('type') == 'DEPLOY':
+                logging.info("Received Railway deployment notification")
+                return jsonify({"status": "ignored"}), 200
 
-            session = load_session(phone)
+         
+            if not isinstance(data, dict):
+                logging.warning("Skipping non-dictionary data")
+                return jsonify({"status": "ignored"}), 200
+
+            
+            if whatsapp.is_message(data):
+                logging.info("\n=== HANDLING WHATSAPP MESSAGE ===")
+                phone = whatsapp.get_mobile(data)
+                name = whatsapp.get_name(data)
+                msg = whatsapp.get_message(data).strip()
+                logging.info(f"New message from {phone} ({name}): '{msg}'")
 
 
 
             if not session:
                 whatsapp.send_message(
-                " Welcome! What would you like to do?\n\n"
+                " You sent me a message!\n\n"
+                "Welcome! What would you like to do?\n\n"
                 "1️⃣ Register to Runde Rural Clinic Project\n"
                 "2️⃣ Make payment\n\n"
                 "Please reply with a number", phone)
