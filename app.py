@@ -224,19 +224,24 @@ def webhook_debug():
                 logging.info(f"New message from {phone} ({name}): '{msg}'")
 
             session = load_session(phone)
-
             if not session:
-                whatsapp.send_message(
-                " You sent me a message!\n\n"
-                "Welcome! What would you like to do?\n\n"
-                "1️⃣ Register to Runde Rural Clinic Project\n"
-                "2️⃣ Make payment\n\n"
-                "Please reply with a number", phone)
-                session = load_session(phone)
-                save_session(phone, session["step"], session["data"])
-                
 
+
+                whatsapp.send_message(
+                    " You sent me a message!\n\n"
+                    "Welcome! What would you like to do?\n\n"
+                    "1️⃣ Register to Runde Rural Clinic Project\n"
+                    "2️⃣ Make payment\n\n"
+                    "Please reply with a number", phone)
+                
+                session = {
+                    "step": "start",
+                    "data": {},
+                    "last_active": datetime.now()
+                }
+                save_session(phone, session["step"], session["data"])
                 return jsonify({"status": "session initialized"}), 200
+
 
 
             if check_session_timeout(phone):
