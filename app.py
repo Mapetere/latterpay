@@ -164,8 +164,17 @@ def webhook_debug():
                 data = request.get_json()
 
                 try:
-                    changes = data["entry"][0]["changes"][0]["value"]
-                    msg_data = changes.get("messages", [])[0]  
+                    try:
+                        changes = data["entry"][0]["changes"][0]["value"]
+                        messages = changes.get("messages", [])
+                        if not messages:
+                            logging.warning("No messages in webhook event")
+                            return "ok"
+                        msg_data = messages[0]
+                    except (IndexError, KeyError) as e:
+                        logging.error(f"Error processing webhook: {e}")
+                        return "ok"
+    
 
                     if not msg_data:
                         return "ok"
