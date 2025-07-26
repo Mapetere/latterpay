@@ -250,9 +250,9 @@ def webhook_debug():
                 }
                 save_session(phone, session["step"], session["data"])
 
-                handle_first_message(phone, msg, session)
 
-                return jsonify({"status": "session initialized"}), 200
+                return handle_first_message(phone, msg, session)
+
 
 
 
