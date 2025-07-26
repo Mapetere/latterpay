@@ -165,30 +165,26 @@ def webhook_debug():
 
                 try:
                     changes = data["entry"][0]["changes"][0]["value"]
-                    msg_data = changes.get("messages", [])[0]  # Might be empty if it's not a user message
+                    msg_data = changes.get("messages", [])[0]  
 
                     if not msg_data:
                         return "ok"
 
                     msg_id = msg_data.get("id")
                     msg_from = msg_data.get("from")
-
-                    # ✨ Echo check using message ID
                     if is_echo_message(msg_id):
-                        print("🔁 Detected echo via DB. Ignoring.")
+                        print(" Detected echo via DB. Ignoring.")
                         return "ok"
 
-                    # Optional: echo fallback checks
                     if msg_data.get("echo"):
-                        print("🔁 Detected echo=True. Ignoring.")
+                        print(" Detected echo=True. Ignoring.")
                         return "ok"
 
                     if msg_from == os.getenv("PHONE_NUMBER_ID") or msg_from == os.getenv("WHATSAPP_BOT_NUMBER"):
-                        print("🔁 Message from own bot. Ignored.")
+                        print(" Message from own bot. Ignored.")
                         return "ok"
 
                     print("✅ Valid message received:", msg_data.get("text", {}).get("body"))
-                    # Proceed with your session logic here...
 
                 except (KeyError, IndexError, OperationalError) as e:
                     logging.error(f"Error processing webhook: {e}")
