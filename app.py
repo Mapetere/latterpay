@@ -193,7 +193,7 @@ def webhook_debug():
                         print(" Message from own bot. Ignored.")
                         return "ok"
 
-                    print("✅ Valid message received:", msg_data.get("text", {}).get("body"))
+                    print(" Valid message received:", msg_data.get("text", {}).get("body"))
 
                 except (KeyError, IndexError, OperationalError) as e:
                     logging.error(f"Error processing webhook: {e}")
