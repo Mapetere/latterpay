@@ -223,7 +223,7 @@ def webhook_debug():
                 msg = whatsapp.get_message(data).strip()
                 logging.info(f"New message from {phone} ({name}): '{msg}'")
 
-
+            session = load_session(phone)
 
             if not session:
                 whatsapp.send_message(
