@@ -14,7 +14,7 @@ from services.pygwan_whatsapp import whatsapp
 from services.config import CUSTOM_TYPES_FILE, PAYMENTS_FILE
 from services.sessions import check_session_timeout, cancel_session, initialize_session,load_session,save_session,update_user_step
 from services.donationflow import handle_user_message
-from services.registrationflow import RegistrationFlow
+from services.registrationflow import RegistrationFlow,handle_first_message
 from services.whatsappservice import WhatsAppService
 
 from services.sessions import monitor_sessions
@@ -249,6 +249,9 @@ def webhook_debug():
                     "last_active": datetime.now()
                 }
                 save_session(phone, session["step"], session["data"])
+
+                handle_first_message(phone, msg, session)
+
                 return jsonify({"status": "session initialized"}), 200
 
 
@@ -260,37 +263,6 @@ def webhook_debug():
             if msg.lower() == "cancel":
                 cancel_session(phone)
                 return jsonify({"status": "session cancelled"}), 200
-
-
-            session["last_active"] = datetime.now()
-            save_session(phone, session["step"], session["data"])
-
-
-            if msg == "1":
-                session["mode"] = "registration"
-                session["step"] = "awaiting_name"
-                save_session(phone, session["step"], session["data"])
-                return jsonify({"status": "registration started"}), 200
-
-            elif msg == "2":
-                session["mode"] = "donation"
-                session["step"] = "awaiting_amount"
-                save_session(phone, session["step"], session["data"])
-                return jsonify({"status": "donation started"}), 200
-            
-            else: 
-                if not session.get("mode"):
-                    whatsapp.send_message("❓ Please type *1* to Register or *2* to Donate.", phone)
-                    return jsonify({"status": "awaiting valid option"}), 200
-
-
-            # Route to appropriate flow based on current mode
-            if session.get("mode") == "registration":
-                return RegistrationFlow.start_registration(phone, msg)
-
-            elif session.get("mode") == "donation":
-                return whatsapp.send_message("Oops! Donation flow is not in use yet.\n"
-                                             "Contact Nyasha on mapeterenyasha@gmail.com for any enquiries.", phone)
 
 
 

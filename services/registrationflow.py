@@ -4,6 +4,10 @@ from services.sessions import save_session, update_last_active, cancel_session
 from services.pygwan_whatsapp import whatsapp
 from services.pygwan_whatsapp import whatsapp
 from services.sessions import save_session
+from flask import jsonify
+from datetime import datetime 
+
+
 
 
 class RegistrationFlow:
@@ -15,6 +19,42 @@ class RegistrationFlow:
         save_session(phone, session["step"], session["data"])
 
 step_handlers = {}
+
+
+def handle_first_message(phone, msg, session):
+
+    update_last_active(phone)
+
+    session["last_active"] = datetime.now()
+    save_session(phone, session["step"], session["data"])
+
+
+    if msg == "1":
+        session["mode"] = "registration"
+        session["step"] = "awaiting_name"
+        save_session(phone, session["step"], session["data"])
+        return jsonify({"status": "registration started"}), 200
+
+    elif msg == "2":
+        session["mode"] = "donation"
+        session["step"] = "awaiting_amount"
+        save_session(phone, session["step"], session["data"])
+        return jsonify({"status": "donation started"}), 200
+    
+    else: 
+        if not session.get("mode"):
+            whatsapp.send_message("❓ Please type *1* to Register or *2* to Donate.", phone)
+            return jsonify({"status": "awaiting valid option"}), 200
+
+
+    # Route to appropriate flow based on current mode
+    if session.get("mode") == "registration":
+        return RegistrationFlow.start_registration(phone, msg)
+
+    elif session.get("mode") == "donation":
+        return whatsapp.send_message("Oops! Donation flow is not in use yet.\n"
+                                        "Contact Nyasha on mapeterenyasha@gmail.com for any enquiries.", phone)
+
 
 
 def handle_registration_message(phone, msg, session):
@@ -96,6 +136,7 @@ def handle_confirmation_step(phone, msg, session):
     return "ok"
 
 step_handlers = {
+    "awaiting_message": handle_registration_message,
     "awaiting_name": handle_name_step,
     "awaiting_email": handle_email_step,
     "awaiting_area": handle_area_step,
