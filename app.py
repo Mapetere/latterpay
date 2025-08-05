@@ -191,8 +191,8 @@ def webhook_debug():
 
             logger.info(f"Valid message received from {phone}: {msg}")
 
-            if phone == os.getenv("ADMIN_PHONE"):
-                return AdminService.handle_admin_command(phone, msg) or jsonify({"status": "processed"}), 200
+            #if phone == os.getenv("ADMIN_PHONE"):
+                #return AdminService.handle_admin_command(phone, msg) or jsonify({"status": "processed"}), 200 
 
             # Try to load an existing session from the my database2112211
             session = load_session(phone)
