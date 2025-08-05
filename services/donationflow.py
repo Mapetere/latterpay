@@ -19,7 +19,6 @@ from services.sessions import (
      update_last_active
 )
 from services.config import admin_phone
-from services.adminservice import handle_approval_command
 from services.setup import send_payment_report_to_finance
 from services.pygwan_whatsapp import whatsapp
 from services.userstore import add_known_user, is_known_user
