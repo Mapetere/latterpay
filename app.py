@@ -77,7 +77,7 @@ def init_db():
         )
     """)
 
-    # Safely added the  'warned' column if it doesn't exist
+
     cursor.execute("PRAGMA table_info(sessions)")
     columns = [col[1] for col in cursor.fetchall()]
     if "warned" not in columns:
@@ -233,6 +233,7 @@ def webhook_debug():
                 logging.info(f"New message from {phone} ({name}): '{msg}'")
 
             session = load_session(phone)
+
             if not session:
 
 
@@ -251,7 +252,7 @@ def webhook_debug():
                 save_session(phone, session["step"], session["data"])
 
 
-                return handle_first_message(phone, msg, session)
+                return handle_first_message(phone,msg,session)
 
 
 

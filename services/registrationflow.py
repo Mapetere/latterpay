@@ -3,7 +3,7 @@
 from services.sessions import save_session, update_last_active, cancel_session
 from services.pygwan_whatsapp import whatsapp
 from services.pygwan_whatsapp import whatsapp
-from services.sessions import save_session
+from services.sessions import save_session,initialize_session
 from flask import jsonify
 from datetime import datetime 
 
@@ -12,11 +12,12 @@ from datetime import datetime
 
 class RegistrationFlow:
     @staticmethod
-    def start_registration(phone):
+    def start_registration(phone,msg):
         whatsapp.send_message("Registration started.\n" \
         " What's your full name?", phone)
         session = {"mode": "registration", "step": "awaiting_name", "data": {}}
         save_session(phone, session["step"], session["data"])
+        return handle_name_step(phone,msg, session)
 
 step_handlers = {}
 
@@ -33,27 +34,41 @@ def handle_first_message(phone, msg, session):
         session["mode"] = "registration"
         session["step"] = "awaiting_name"
         save_session(phone, session["step"], session["data"])
-        return jsonify({"status": "registration started"}), 200
+        return RegistrationFlow.start_registration(phone)
 
     elif msg == "2":
         session["mode"] = "donation"
         session["step"] = "awaiting_amount"
         save_session(phone, session["step"], session["data"])
-        return jsonify({"status": "donation started"}), 200
+        return initialize_session(phone)
     
-    else: 
-        if not session.get("mode"):
+    elif msg.lower() == "cancel":
+        cancel_session(phone)
+        return jsonify({"status": "session cancelled"}), 200    
+    
+    elif msg != "1" or "2":
             whatsapp.send_message("❓ Please type *1* to Register or *2* to Donate.", phone)
             return jsonify({"status": "awaiting valid option"}), 200
 
+    else: 
+        if not session.get("mode"):
+            whatsapp.send_message(
+                "👋 You sent me a message!\n\n"
+                "Welcome! What would you like to do?\n\n"
+                "1️⃣ Register to Runde Rural Clinic Project\n"
+                "2️⃣ Make payment\n\n"
+                "Please reply with a number", phone)
+            return jsonify({"status": "awaiting valid option"}), 200
 
-    # Route to appropriate flow based on current mode
+
+
     if session.get("mode") == "registration":
         return RegistrationFlow.start_registration(phone, msg)
 
     elif session.get("mode") == "donation":
         return whatsapp.send_message("Oops! Donation flow is not in use yet.\n"
                                         "Contact Nyasha on mapeterenyasha@gmail.com for any enquiries.", phone)
+
 
 
 
@@ -121,6 +136,7 @@ def handle_skill_step(phone, msg, session):
     )
     return "ok"
 
+
 def handle_confirmation_step(phone, msg, session):
     msg = msg.strip().lower()
     if msg == "confirm":
@@ -135,11 +151,13 @@ def handle_confirmation_step(phone, msg, session):
         whatsapp.send_message("Please type *confirm* or *cancel*.", phone)
     return "ok"
 
+
 step_handlers = {
     "awaiting_message": handle_registration_message,
     "awaiting_name": handle_name_step,
     "awaiting_email": handle_email_step,
     "awaiting_area": handle_area_step,
     "awaiting_skill": handle_skill_step,
-    "awaiting_confirmation": handle_confirmation_step
+    "awaiting_confirmation": handle_confirmation_step,
+    "awaiting_amount": initialize_session
 }
