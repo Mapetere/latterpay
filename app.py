@@ -1,28 +1,32 @@
-from flask import Flask, request, jsonify
-from datetime import datetime
-import os
-import json
-import sqlite3
-from sqlite3 import OperationalError
-from paynow import Paynow
-import sys
-import time
-import logging
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, PlainTextResponse, HTMLResponse
 from dotenv import load_dotenv
+import uvicorn
+import json
+import os
+import logging
+import sys
+import sqlite3
+from datetime import datetime
 import threading
+import time
+
+from services.sessions import (
+    check_session_timeout, cancel_session, initialize_session,
+    load_session, save_session, update_user_step, monitor_sessions
+)
+from services.whatsappservice import WhatsAppService
+from services.registrationflow import handle_first_message
 from services.pygwan_whatsapp import whatsapp
 from services.config import CUSTOM_TYPES_FILE, PAYMENTS_FILE
-from services.sessions import check_session_timeout, cancel_session, initialize_session,load_session,save_session,update_user_step
-from services.donationflow import handle_user_message
-from services.registrationflow import RegistrationFlow,handle_first_message
-from services.whatsappservice import WhatsAppService
 
-from services.sessions import monitor_sessions
+# Load environment variables
+load_dotenv()
 
+# Initialize FastAPI
+app = FastAPI()
 
-
-
-
+# Setup Logging
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -33,60 +37,41 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
-load_dotenv()
-
-
+# Initialize files if missing
 for file_path in [CUSTOM_TYPES_FILE, PAYMENTS_FILE]:
     if not os.path.exists(file_path):
         with open(file_path, 'w') as f:
             json.dump([], f)
 
-latterpay = Flask(__name__)
-
-
-
-
+# === DB INIT ===
 def init_db():
     conn = sqlite3.connect("botdata.db", timeout=10)
     cursor = conn.cursor()
-
-    # Sent Messages Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sent_messages (
             msg_id TEXT PRIMARY KEY,
             sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-
-    # Known Users Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS known_users (
             phone TEXT PRIMARY KEY,
             first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-
-    # Sessions Table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sessions (
             phone TEXT PRIMARY KEY,
             step TEXT,
             data TEXT,
-            last_active TIMESTAMP
+            last_active TIMESTAMP,
+            warned INTEGER DEFAULT 0
         )
     """)
-
-
-    cursor.execute("PRAGMA table_info(sessions)")
-    columns = [col[1] for col in cursor.fetchall()]
-    if "warned" not in columns:
-        cursor.execute("ALTER TABLE sessions ADD COLUMN warned INTEGER DEFAULT 0")
-
     conn.commit()
     conn.close()
 
-
+# === Echo handling ===
 def is_echo_message(msg_id):
     conn = sqlite3.connect("botdata.db", timeout=10)
     cursor = conn.cursor()
@@ -109,172 +94,121 @@ def delete_old_ids():
     conn.commit()
     conn.close()
 
-def message_exists(msg_id):
-    return is_echo_message(msg_id)
-
-
 def cleanup_message_ids():
     def cleaner():
         while True:
             try:
                 delete_old_ids()
-                time.sleep(3600)  # every 10 minutes
+                time.sleep(3600)
             except Exception as e:
                 logger.warning(f"[CLEANUP ERROR] {e}")
                 time.sleep(600)
-
     threading.Thread(target=cleaner, daemon=True).start()
 
 
-@latterpay.route("/")
-def home():
+# === Routes ===
+@app.get("/")
+async def home():
     logger.info("Home endpoint accessed")
-    return "WhatsApp Donation Service is running"
+    return PlainTextResponse("WhatsApp Donation Service is running")
 
-@latterpay.route("/payment-return")
-def payment_return():
-    return "<h2>Payment attempted. You may now return to WhatsApp.</h2>"
+@app.get("/payment-return")
+async def payment_return():
+    return HTMLResponse("<h2>Payment attempted. You may now return to WhatsApp.</h2>")
 
-@latterpay.route("/payment-result", methods=["POST"])
-def payment_result():
+@app.post("/payment-result")
+async def payment_result(request: Request):
     try:
-        raw_data = request.data.decode("utf-8")
-        logger.info("Paynow Result Received: \n" + raw_data)
-        return "OK"
+        raw_data = await request.body()
+        logger.info("Paynow Result Received:\n" + raw_data.decode())
+        return PlainTextResponse("OK")
     except Exception as e:
         logger.error(f"❌ Error handling Paynow result: {e}")
-        return "ERROR", 500
+        return PlainTextResponse("ERROR", status_code=500)
 
-
-@latterpay.route("/webhook", methods=["GET", "POST"])
-def webhook_debug():
+@app.api_route("/webhook", methods=["GET", "POST"])
+async def webhook_debug(request: Request):
     try:
         if request.method == "GET":
-            verify_token = request.args.get("hub.verify_token")
-            challenge = request.args.get("hub.challenge")
+            params = dict(request.query_params)
+            verify_token = params.get("hub.verify_token")
+            challenge = params.get("hub.challenge")
             if verify_token == os.getenv("VERIFY_TOKEN"):
                 logger.info("Webhook verified successfully!")
-                return challenge, 200
-            return "Verification failed", 403
+                return PlainTextResponse(challenge)
+            return PlainTextResponse("Verification failed", status_code=403)
 
         elif request.method == "POST":
-            data = None
-
-            if request.is_json:
-                data = request.get_json()
-
-                try:
-                    try:
-                        changes = data["entry"][0]["changes"][0]["value"]
-                        messages = changes.get("messages", [])
-                        if not messages:
-                            logging.warning("No messages in webhook event")
-                            return "ok"
-                        msg_data = messages[0]
-                    except (IndexError, KeyError) as e:
-                        logging.error(f"Error processing webhook: {e}")
-                        return "ok"
-    
-
-                    if not msg_data:
-                        return "ok"
-
-                    msg_id = msg_data.get("id")
-                    msg_from = msg_data.get("from")
-                    if is_echo_message(msg_id):
-                        print(" Detected echo via DB. Ignoring.")
-                        return "ok"
-
-                    if msg_data.get("echo"):
-                        print(" Detected echo=True. Ignoring.")
-                        return "ok"
-
-                    if msg_from == os.getenv("PHONE_NUMBER_ID") or msg_from == os.getenv("WHATSAPP_BOT_NUMBER"):
-                        print(" Message from own bot. Ignored.")
-                        return "ok"
-
-                    print(" Valid message received:", msg_data.get("text", {}).get("body"))
-
-                except (KeyError, IndexError, OperationalError) as e:
-                    logging.error(f"Error processing webhook: {e}")
-                    return "ok"
-
-            else:
-                try:
-                    raw_data = request.data.decode("utf-8")
-                    logging.info(f"Incoming RAW POST data: {raw_data}")
-                    data = json.loads(raw_data)
-
-                except Exception as decode_err:
-                    logging.error(f"Failed to decode raw POST data: {decode_err}")
-                    return jsonify({"status": "error", "message": "Invalid raw JSON"}), 400
-
+            body = await request.body()
+            try:
+                data = json.loads(body)
+            except json.JSONDecodeError:
+                logger.error("Invalid JSON received")
+                return JSONResponse({"error": "Invalid JSON"}, status_code=400)
 
             if data.get("type") == "DEPLOY":
-                logging.info("Received Railway deployment notification")
-                return jsonify({"status": "ignored"}), 200
+                logger.info("Railway deployment ping received")
+                return JSONResponse({"status": "ignored"})
 
-
-            if isinstance(data, dict) and data.get('type') == 'DEPLOY':
-                logging.info("Received Railway deployment notification")
-                return jsonify({"status": "ignored"}), 200
-
-         
-            if not isinstance(data, dict):
-                logging.warning("Skipping non-dictionary data")
-                return jsonify({"status": "ignored"}), 200
-
-            
+            # === WhatsApp Message Handling ===
             if whatsapp.is_message(data):
-                logging.info("\n=== HANDLING WHATSAPP MESSAGE ===")
+                logger.info("=== WHATSAPP MESSAGE RECEIVED ===")
                 phone = whatsapp.get_mobile(data)
                 name = whatsapp.get_name(data)
                 msg = whatsapp.get_message(data).strip()
-                logging.info(f"New message from {phone} ({name}): '{msg}'")
+                logger.info(f"Message from {phone} ({name}): {msg}")
 
-            session = load_session(phone)
+                msg_id = whatsapp.get_message_id(data)
+                if is_echo_message(msg_id) or msg_id is None:
+                    logger.info("Ignored echo or missing msg ID.")
+                    return JSONResponse({"status": "ignored"})
 
-            if not session:
-                
-        
-                whatsapp.send_button({"header": "Welcome to LatterPay!", "body": "Have you registered on google forms?", "action": {"buttons": [
-                    {"type": "reply", "reply": {"id": "yes", "title": "Yes, I have registered"}},
-                    {"type": "reply", "reply": {"id": "no", "title": "No, I haven't registered"}}
-                ]}}, phone)
+                save_sent_message_id(msg_id)
 
-                logger.info(f"Creating new session for {phone} as it does not exist")
+                session = load_session(phone)
 
-                session = {
-                    "step": "start",
-                    "data": {},
-                    "last_active": datetime.now()
-                }
-                save_session(phone, session["step"], session["data"])
+                if not session:
+                    # New user — ask if they registered before
+                    whatsapp.send_button({
+                        "header": "Welcome to LatterPay!",
+                        "body": "Have you registered on Google Forms?",
+                        "action": {
+                            "buttons": [
+                                {"type": "reply", "reply": {"id": "yes", "title": "Yes, I have registered"}},
+                                {"type": "reply", "reply": {"id": "no", "title": "No, I haven't registered"}}
+                            ]
+                        }
+                    }, phone)
 
+                    session = {
+                        "step": "start",
+                        "data": {},
+                        "last_active": datetime.now()
+                    }
+                    save_session(phone, session["step"], session["data"])
 
-                return handle_first_message(phone,msg,session)
+                    return await handle_first_message(phone, msg, session)
 
+                # Handle cancellation
+                if msg.lower() == "cancel":
+                    cancel_session(phone)
+                    return JSONResponse({"status": "session cancelled"})
 
+                if check_session_timeout(phone):
+                    return JSONResponse({"status": "session timeout"})
 
+                # Main logic
+                return await handle_first_message(phone, msg, session)
 
-            if check_session_timeout(phone):
-                return jsonify({"status": "session timeout"}), 200
-
-
-            if msg.lower() == "cancel":
-                cancel_session(phone)
-                return jsonify({"status": "session cancelled"}), 200
-
-
+            else:
+                logger.info("Ignored non-message webhook")
+                return JSONResponse({"status": "ignored"})
 
     except Exception as e:
-        logger.error(f"Message processing error: {str(e)}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+        logger.error(f"Unhandled error in webhook: {e}", exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
 
-
-if __name__ == "__main__":
-    init_db()
-    monitor_sessions()
-    port = int(os.environ.get("PORT", 8010))
-    logger.info(f"Starting server on port {port}")
-    latterpay.run(host="0.0.0.0", port=port)
+# === Startup Tasks ===
+init_db()
+monitor_sessions()
+cleanup_message_ids()
