@@ -235,15 +235,15 @@ def webhook_debug():
             session = load_session(phone)
 
             if not session:
-
-
-                whatsapp.send_message(
-                    " You sent me a message!\n\n"
-                    "Welcome! What would you like to do?\n\n"
-                    "1️⃣ Register to Runde Rural Clinic Project\n"
-                    "2️⃣ Make payment\n\n"
-                    "Please reply with a number", phone)
                 
+        
+                whatsapp.send_button({"header": "Welcome to LatterPay!", "body": "Have you registered on google forms?", "action": {"buttons": [
+                    {"type": "reply", "reply": {"id": "yes", "title": "Yes, I have registered"}},
+                    {"type": "reply", "reply": {"id": "no", "title": "No, I haven't registered"}}
+                ]}}, phone)
+
+                logger.info(f"Creating new session for {phone} as it does not exist")
+
                 session = {
                     "step": "start",
                     "data": {},
