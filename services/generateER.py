@@ -15,7 +15,6 @@ def generate_excel_report():
             
         df = pd.DataFrame(payments)
         
-        # Create temporary file
         temp_file = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
         excel_path = temp_file.name
         df.to_excel(excel_path, index=False)
