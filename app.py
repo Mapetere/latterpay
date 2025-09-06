@@ -20,13 +20,10 @@ from services.registrationflow import handle_first_message
 from services.pygwan_whatsapp import whatsapp
 from services.config import CUSTOM_TYPES_FILE, PAYMENTS_FILE
 
-# Load environment variables
 load_dotenv()
 
-# Initialize FastAPI
 app = FastAPI()
 
-# Setup Logging
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -37,13 +34,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize files if missing
 for file_path in [CUSTOM_TYPES_FILE, PAYMENTS_FILE]:
     if not os.path.exists(file_path):
         with open(file_path, 'w') as f:
             json.dump([], f)
 
-# === DB INIT ===
 def init_db():
     conn = sqlite3.connect("botdata.db", timeout=10)
     cursor = conn.cursor()
@@ -106,7 +101,8 @@ def cleanup_message_ids():
     threading.Thread(target=cleaner, daemon=True).start()
 
 
-# === Routes ===
+
+
 @app.get("/")
 async def home():
     logger.info("Home endpoint accessed")
@@ -125,6 +121,8 @@ async def payment_result(request: Request):
     except Exception as e:
         logger.error(f"❌ Error handling Paynow result: {e}")
         return PlainTextResponse("ERROR", status_code=500)
+
+
 
 @app.api_route("/webhook", methods=["GET", "POST"])
 async def webhook_debug(request: Request):
@@ -150,7 +148,6 @@ async def webhook_debug(request: Request):
                 logger.info("Railway deployment ping received")
                 return JSONResponse({"status": "ignored"})
 
-            # === WhatsApp Message Handling ===
             if whatsapp.is_message(data):
                 logger.info("=== WHATSAPP MESSAGE RECEIVED ===")
                 phone = whatsapp.get_mobile(data)
@@ -168,7 +165,6 @@ async def webhook_debug(request: Request):
                 session = load_session(phone)
 
                 if not session:
-                    # New user — ask if they registered before
                     whatsapp.send_button({
                         "header": "Welcome to LatterPay!",
                         "body": "Have you registered on Google Forms?",
@@ -189,7 +185,6 @@ async def webhook_debug(request: Request):
 
                     return await handle_first_message(phone, msg, session)
 
-                # Handle cancellation
                 if msg.lower() == "cancel":
                     cancel_session(phone)
                     return JSONResponse({"status": "session cancelled"})
@@ -197,7 +192,6 @@ async def webhook_debug(request: Request):
                 if check_session_timeout(phone):
                     return JSONResponse({"status": "session timeout"})
 
-                # Main logic
                 return await handle_first_message(phone, msg, session)
 
             else:
@@ -208,7 +202,6 @@ async def webhook_debug(request: Request):
         logger.error(f"Unhandled error in webhook: {e}", exc_info=True)
         return JSONResponse({"error": str(e)}, status_code=500)
 
-# === Startup Tasks ===
 init_db()
 monitor_sessions()
 cleanup_message_ids()
