@@ -12,10 +12,9 @@ import threading
 import time
 
 from services.sessions import (
-    check_session_timeout, cancel_session, initialize_session,
-    load_session, save_session, update_user_step, monitor_sessions
+    check_session_timeout, cancel_session,
+    load_session, save_session, monitor_sessions
 )
-from services.whatsappservice import WhatsAppService
 from services.registrationflow import handle_first_message
 from services.pygwan_whatsapp import whatsapp
 from services.config import CUSTOM_TYPES_FILE, PAYMENTS_FILE
