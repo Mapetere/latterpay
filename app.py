@@ -65,7 +65,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-# === Echo handling ===
 def is_echo_message(msg_id):
     conn = sqlite3.connect("botdata.db", timeout=10)
     cursor = conn.cursor()
@@ -118,7 +117,7 @@ async def payment_result(request: Request):
         logger.info("Paynow Result Received:\n" + raw_data.decode())
         return PlainTextResponse("OK")
     except Exception as e:
-        logger.error(f"❌ Error handling Paynow result: {e}")
+        logger.error(f" Error handling Paynow result: {e}")
         return PlainTextResponse("ERROR", status_code=500)
 
 
