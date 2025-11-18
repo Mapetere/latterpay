@@ -84,61 +84,61 @@ def decrypt_payload(encrypted_payload_base64, aes_key, iv):
 
 def decrypt_aes_key(encrypted_key_b64, private_key_path, passphrase):
     try:
-        logger.debug("🔐 Starting AES key decryption...")
-        logger.debug(f"🔐 Encrypted AES Key (raw input): {encrypted_key_b64}")
+        logger.debug("Starting AES key decryption...")
+        logger.debug(f"Encrypted AES Key (raw input): {encrypted_key_b64}")
 
         # Unescape slashes
         cleaned_key_b64 = encrypted_key_b64.replace("\\/", "/")
-        logger.debug(f"🔐 Cleaned Encrypted AES Key: {cleaned_key_b64}")
+        logger.debug(f"Cleaned Encrypted AES Key: {cleaned_key_b64}")
 
         # Fix padding if missing
         missing_padding = len(cleaned_key_b64) % 4
         if missing_padding:
-            logger.warning(f"🔧 Base64 key is missing {4 - missing_padding} padding characters. Fixing...")
+            logger.warning(f"Base64 key is missing {4 - missing_padding} padding characters. Fixing...")
             cleaned_key_b64 += "=" * (4 - missing_padding)
 
-        logger.debug(f"📏 Final key length: {len(cleaned_key_b64)}")
+        logger.debug(f"Final key length: {len(cleaned_key_b64)}")
         
         # Decode base64
         encrypted_key_bytes = base64.b64decode(cleaned_key_b64)
-        logger.debug(f"🔓 Encrypted AES key (decoded bytes length): {len(encrypted_key_bytes)}")
-        logger.debug(f"🔓 Encrypted AES key (first 16 bytes): {encrypted_key_bytes[:16].hex()}...")
+        logger.debug(f"Encrypted AES key (decoded bytes length): {len(encrypted_key_bytes)}")
+        logger.debug(f"Encrypted AES key (first 16 bytes): {encrypted_key_bytes[:16].hex()}...")
 
         # Load private key
         if not os.path.exists(private_key_path):
-            logger.error(f"❌ Private key file not found at: {private_key_path}")
+            logger.error(f"Private key file not found at: {private_key_path}")
             raise FileNotFoundError("Private key file is missing.")
         
-        logger.debug(f"🔑 Loading RSA private key from: {private_key_path}")
+        logger.debug(f"Loading RSA private key from: {private_key_path}")
         with open(private_key_path, "rb") as key_file:
             private_key = RSA.import_key(key_file.read(), passphrase=passphrase)
 
-        logger.debug("🔑 RSA private key successfully loaded")
+        logger.debug("RSA private key successfully loaded")
 
         # Decrypt AES key using RSA
         cipher_rsa = PKCS1_OAEP.new(private_key)
         decrypted_key = cipher_rsa.decrypt(encrypted_key_bytes)
 
-        logger.info("✅ AES key successfully decrypted")
-        logger.debug(f"✅ AES key (hex): {decrypted_key.hex()}")
+        logger.info("AES key successfully decrypted")
+        logger.debug(f"AES key (hex): {decrypted_key.hex()}")
 
         return decrypted_key
 
     except base64.binascii.Error as e:
-        logger.error("❌ Base64 decoding failed. Check if encrypted key is valid Base64.", exc_info=True)
+        logger.error("Base64 decoding failed. Check if encrypted key is valid Base64.", exc_info=True)
         raise
 
     except ValueError as e:
-        logger.error("❌ RSA decryption failed. Possible wrong key or bad ciphertext.", exc_info=True)
+        logger.error("RSA decryption failed. Possible wrong key or bad ciphertext.", exc_info=True)
         raise
 
     except Exception as e:
-        logger.error("❌ Unexpected error during AES key decryption.", exc_info=True)
+        logger.error("Unexpected error during AES key decryption.", exc_info=True)
         raise
 
 
     except (ValueError, Exception) as e:
-        logger.error("❌ Failed to decrypt AES key. Check base64 string or private key.", exc_info=True)
+        logger.error("Failed to decrypt AES key. Check base64 string or private key.", exc_info=True)
         raise
 
 
@@ -230,7 +230,7 @@ def cleanup_message_ids():
                 time.sleep(600)
     threading.Thread(target=cleaner, daemon=True).start()
 
-# --- ROUTES --- #
+# --- ALL ROUTES --- #
 @latterpay.route("/")
 def home():
     logger.info("Home endpoint accessed")
@@ -247,7 +247,7 @@ def payment_result():
         logger.info("Paynow Result Received: \n" + raw_data)
         return "OK"
     except Exception as e:
-        logger.error(f"❌ Error handling Paynow result: {e}")
+        logger.error(f"Error handling Paynow result: {e}")
         return "ERROR", 500
 
 
@@ -271,11 +271,11 @@ def webhook_debug():
                 return jsonify({"status": "error", "message": "No valid JSON received"}), 400
             
             if is_ignorable_system_payload(data):
-                logger.info("🔕 Ignored system-level webhook data.")
+                logger.info("Ignored system-level webhook data.")
                 return "ok"
 
 
-            # 🔐 Encrypted flow path (from Meta Flow)
+            # Encrypted flow path (from Meta Flow)
             if "encrypted_flow_data" in data and "encrypted_aes_key" in data:
                 try:
                     encrypted_data_b64 = data.get("encrypted_flow_data")
@@ -285,8 +285,8 @@ def webhook_debug():
                     if not (encrypted_data_b64 and encrypted_key_b64 and iv_b64):
                         return jsonify({"error": "Missing encryption fields"}), 400
                     
-                    logger.debug(f"🔐 Encrypted AES key from request: {encrypted_key_b64}")
-                    logger.debug(f"🔐 IV from request: {iv_b64}")   
+                    logger.debug(f"Encrypted AES key from request: {encrypted_key_b64}")
+                    logger.debug(f"IV from request: {iv_b64}")   
 
                     aes_key = decrypt_aes_key(
                         encrypted_key_b64,
@@ -302,7 +302,7 @@ def webhook_debug():
                     logger.info(f"Decrypted Meta flow data: {decrypted_data}")
                     action = decrypted_data.get("action")
                     flow_token = decrypted_data.get("flow_token", "UNKNOWN")
-                    logger.debug(f"🔐 Encrypted AES key (raw): {data.get('encrypted_aes_key')}")
+                    logger.debug(f"Encrypted AES key (raw): {data.get('encrypted_aes_key')}")
 
 
                     if action == "INIT":
@@ -328,7 +328,7 @@ def webhook_debug():
                     return encrypted_b64, 200, {"Content-Type": "text/plain"}
 
                 except Exception as e:
-                    logger.error(f"❌ Error in encrypted flow logic: {e}", exc_info=True)
+                    logger.error(f"Error in encrypted flow logic: {e}", exc_info=True)
                     return jsonify({"status": "error", "message": str(e)}), 500
 
 
@@ -374,7 +374,7 @@ def webhook_debug():
                     return handle_user_message(phone, msg, session)
 
                 except Exception as e:
-                    logger.error(f"❌ Error in fallback webhook logic: {e}", exc_info=True)
+                    logger.error(f"Error in fallback webhook logic: {e}", exc_info=True)
                     return jsonify({"status": "error", "message": str(e)}), 500
 
             else:
@@ -382,7 +382,7 @@ def webhook_debug():
                 return jsonify({"status": "ignored", "message": "Not a supported POST type"}), 200
 
     except Exception as e:
-        logger.error(f"❌ Global error processing webhook: {e}", exc_info=True)
+        logger.error(f"Global error processing webhook: {e}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
@@ -392,6 +392,6 @@ if __name__ == "__main__":
     cleanup_message_ids()
 
     port = int(os.environ.get("PORT", 8010))
-    logger.info(f"🚀 Starting server on port {port}")
+    logger.info(f"Starting server on port {port}")
     latterpay.run(host="0.0.0.0", port=port)
 
