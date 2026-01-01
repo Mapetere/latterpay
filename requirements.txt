@@ -1,11 +1,41 @@
-pygwan
-fpdf
-requests
-pandas
-flask
-gunicorn
-python-dotenv
-apscheduler
-paynow
-pycryptodome
+# LatterPay Dependencies
+# =====================
+# Version: 2.0.0
+
+# Web Framework
+flask>=2.3.0
+gunicorn>=21.0.0
+
+# WhatsApp Integration
+pygwan>=0.1.0
+
+# Cryptography (for Meta Flow encryption)
+pycryptodome>=3.19.0
 cryptography>=41.0.0
+
+# Payment Gateway
+paynow>=1.0.0
+
+# Data Processing
+pandas>=2.0.0
+
+# PDF Generation
+fpdf>=1.7.0
+
+# HTTP Requests
+requests>=2.31.0
+
+# Environment Variables
+python-dotenv>=1.0.0
+
+# Scheduling
+apscheduler>=3.10.0
+
+# Typing Extensions (for Python 3.9 compatibility)
+typing-extensions>=4.5.0
+
+# Production WSGI Server
+uvicorn>=0.24.0
+
+# Rate Limiting (optional external library backup)
+# ratelimit>=2.2.0
