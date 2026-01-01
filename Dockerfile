@@ -1,25 +1,93 @@
-# Use an official Python image
-FROM python:3.12-slim
+# =============================================================================
+# LatterPay Dockerfile
+# =============================================================================
+# Production-ready Docker configuration with multi-stage build
+# =============================================================================
 
-# Set working directory
-WORKDIR /app
+# Stage 1: Build environment
+FROM python:3.11-slim as builder
 
-# Copy requirements file and install dependencies
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy and install requirements
 COPY requirements.txt .
-COPY private.pem /app/private.pem
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
 
-RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends gcc && \
-	pip install --no-cache-dir -r requirements.txt && \
-	apt-get purge -y --auto-remove gcc && \
-	rm -rf /var/lib/apt/lists/*
 
-# Copy the rest of your code
-COPY . .
+# Stage 2: Production environment
+FROM python:3.11-slim as production
 
-# Expose port (Flask default is 5000)
-EXPOSE 8010
+# Labels
+LABEL maintainer="Nyasha Mapetere <mapeterenyasha@gmail.com>" \
+      version="2.0.0" \
+      description="LatterPay WhatsApp Payment Service"
 
-# Command to run your app
-CMD ["python" , "app.py"]
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONFAULTHANDLER=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    PORT=8010 \
+    APP_HOME=/app
 
+# Create non-root user for security
+RUN groupadd --gid 1000 appgroup && \
+    useradd --uid 1000 --gid appgroup --shell /bin/bash --create-home appuser
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Set up application directory
+WORKDIR $APP_HOME
+
+# Copy application code
+COPY --chown=appuser:appgroup . .
+
+# Create necessary directories
+RUN mkdir -p logs && \
+    chown -R appuser:appgroup $APP_HOME
+
+# Switch to non-root user
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
+
+# Expose port
+EXPOSE ${PORT}
+
+# Run with Gunicorn
+CMD ["gunicorn", "app:latterpay", \
+     "--bind", "0.0.0.0:8010", \
+     "--workers", "2", \
+     "--threads", "4", \
+     "--worker-class", "gthread", \
+     "--worker-tmp-dir", "/dev/shm", \
+     "--timeout", "120", \
+     "--keep-alive", "5", \
+     "--log-level", "info", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "--capture-output"]
