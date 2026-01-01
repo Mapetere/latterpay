@@ -36,11 +36,11 @@ import base64
 # Internal imports
 from services.pygwan_whatsapp import whatsapp
 from services.config import CUSTOM_TYPES_FILE, PAYMENTS_FILE
-from services.sessions import (
-    check_session_timeout, cancel_session, initialize_session,
-    load_session, save_session
-)
+from services.sessions import check_session_timeout, cancel_session, initialize_session,load_session,save_session,update_user_step
 from services.donationflow import handle_user_message
+from services.registrationflow import RegistrationFlow,handle_first_message
+from services.whatsappservice import WhatsAppService
+
 from services.sessions import monitor_sessions
 from services.resilience import (
     rate_limiter, payment_circuit_breaker, whatsapp_circuit_breaker,
@@ -431,16 +431,11 @@ def init_db():
         raise
 
 
-def is_echo_message(msg_id: str) -> bool:
-    """Check if message is an echo (already processed)."""
-    try:
-        with db_pool.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT 1 FROM sent_messages WHERE msg_id = ?", (msg_id,))
-            return cursor.fetchone() is not None
-    except Exception as e:
-        logger.error(f"Echo check failed: {e}")
-        return False
+
+    cursor.execute("PRAGMA table_info(sessions)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "warned" not in columns:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN warned INTEGER DEFAULT 0")
 
 
 def save_sent_message_id(msg_id: str) -> None:
@@ -788,53 +783,128 @@ def process_user_message(phone: str, name: str, msg: str):
         return handle_user_message(phone, msg, session)
         
     except Exception as e:
-        logger.error(f"Message processing error for {phone}: {e}", exc_info=True)
-        # Send friendly error message to user
-        try:
-            whatsapp.send_message(
-                "😔 Sorry, something went wrong. Please try again or type 'cancel' to start over.",
-                phone
-            )
-        except:
-            pass
-        return jsonify({"status": "error"}), 500
+        logger.error(f"❌ Error handling Paynow result: {e}")
+        return "ERROR", 500
 
 
-# ============================================================================
-# GRACEFUL SHUTDOWN HANDLING
-# ============================================================================
-
-shutdown_event = threading.Event()
-
-
-def graceful_shutdown(signum, frame):
-    """Handle graceful shutdown on SIGTERM/SIGINT."""
-    logger.info(f"Received shutdown signal ({signum}). Starting graceful shutdown...")
-    shutdown_event.set()
-    
-    # Close database connections
+@latterpay.route("/webhook", methods=["GET", "POST"])
+def webhook_debug():
     try:
-        db_pool.close_all()
-        logger.info("Database connections closed")
-    except:
-        pass
+        if request.method == "GET":
+            verify_token = request.args.get("hub.verify_token")
+            challenge = request.args.get("hub.challenge")
+            if verify_token == os.getenv("VERIFY_TOKEN"):
+                logger.info("Webhook verified successfully!")
+                return challenge, 200
+            return "Verification failed", 403
+
+        elif request.method == "POST":
+            data = None
+
+            if request.is_json:
+                data = request.get_json()
+
+                try:
+                    try:
+                        changes = data["entry"][0]["changes"][0]["value"]
+                        messages = changes.get("messages", [])
+                        if not messages:
+                            logging.warning("No messages in webhook event")
+                            return "ok"
+                        msg_data = messages[0]
+                    except (IndexError, KeyError) as e:
+                        logging.error(f"Error processing webhook: {e}")
+                        return "ok"
     
-    logger.info("Graceful shutdown complete")
-    sys.exit(0)
+
+                    if not msg_data:
+                        return "ok"
+
+                    msg_id = msg_data.get("id")
+                    msg_from = msg_data.get("from")
+                    if is_echo_message(msg_id):
+                        print(" Detected echo via DB. Ignoring.")
+                        return "ok"
+
+                    if msg_data.get("echo"):
+                        print(" Detected echo=True. Ignoring.")
+                        return "ok"
+
+                    if msg_from == os.getenv("PHONE_NUMBER_ID") or msg_from == os.getenv("WHATSAPP_BOT_NUMBER"):
+                        print(" Message from own bot. Ignored.")
+                        return "ok"
+
+                    print(" Valid message received:", msg_data.get("text", {}).get("body"))
+
+                except (KeyError, IndexError, OperationalError) as e:
+                    logging.error(f"Error processing webhook: {e}")
+                    return "ok"
+
+            else:
+                try:
+                    raw_data = request.data.decode("utf-8")
+                    logging.info(f"Incoming RAW POST data: {raw_data}")
+                    data = json.loads(raw_data)
+
+                except Exception as decode_err:
+                    logging.error(f"Failed to decode raw POST data: {decode_err}")
+                    return jsonify({"status": "error", "message": "Invalid raw JSON"}), 400
 
 
-# Register signal handlers
-signal.signal(signal.SIGTERM, graceful_shutdown)
-signal.signal(signal.SIGINT, graceful_shutdown)
+            if data.get("type") == "DEPLOY":
+                logging.info("Received Railway deployment notification")
+                return jsonify({"status": "ignored"}), 200
 
-# Register atexit handler
-@atexit.register
-def cleanup_on_exit():
-    """Cleanup resources on exit."""
-    try:
-        db_pool.close_all()
-    except:
-        pass
+
+            if isinstance(data, dict) and data.get('type') == 'DEPLOY':
+                logging.info("Received Railway deployment notification")
+                return jsonify({"status": "ignored"}), 200
+
+         
+            if not isinstance(data, dict):
+                logging.warning("Skipping non-dictionary data")
+                return jsonify({"status": "ignored"}), 200
+
+            
+            if whatsapp.is_message(data):
+                logging.info("\n=== HANDLING WHATSAPP MESSAGE ===")
+                phone = whatsapp.get_mobile(data)
+                name = whatsapp.get_name(data)
+                msg = whatsapp.get_message(data).strip()
+                logging.info(f"New message from {phone} ({name}): '{msg}'")
+
+            session = load_session(phone)
+
+            if not session:
+
+
+                whatsapp.send_message(
+                    " You sent me a message!\n\n"
+                    "Welcome! What would you like to do?\n\n"
+                    "1️⃣ Register to Runde Rural Clinic Project\n"
+                    "2️⃣ Make payment\n\n"
+                    "Please reply with a number", phone)
+                
+                session = {
+                    "step": "start",
+                    "data": {},
+                    "last_active": datetime.now()
+                }
+                save_session(phone, session["step"], session["data"])
+
+
+                return handle_first_message(phone,msg,session)
+
+
+
+
+            if check_session_timeout(phone):
+                return jsonify({"status": "session timeout"}), 200
+
+
+            if msg.lower() == "cancel":
+                cancel_session(phone)
+                return jsonify({"status": "session cancelled"}), 200
 
 
 # ============================================================================

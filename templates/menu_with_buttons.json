@@ -7,7 +7,7 @@
   "interactive": {
     "type": "button",
     "body": {
-      "text": "👋🏾 Hi there! What would you like to do today?\n\n1️⃣ Register for the *Runder Rural Clinic Project*\n2️⃣ Make a Payment"
+      "text": "*Hello there!*\n\nWhat would you like to do today?"
     },
     "action": {
       "buttons": [
@@ -21,7 +21,7 @@
         {
           "type": "reply",
           "reply": {
-            "id": "pay_btn",
+            "id": "payment_btn",
             "title": "💸 Make Payment"
           }
         }
