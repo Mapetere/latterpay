@@ -600,7 +600,12 @@ def process_user_message(phone: str, name: str, msg: str):
         if session.get("step") == "start" and msg in ["1", "2"]:
             return handle_first_message_choice(phone, msg, session)
         
-        # Update session activity and delegate to flow handler
+        # Check if user is in REGISTRATION flow (steps starting with "awaiting_" or "reg_")
+        step = session.get("step", "")
+        if step.startswith("awaiting_") or step.startswith("reg_"):
+            return handle_registration_step(phone, msg, session)
+        
+        # Update session activity and delegate to DONATION flow handler
         session["last_active"] = datetime.now()
         save_session(phone, session["step"], session.get("data", {}))
         
@@ -647,6 +652,149 @@ def handle_first_message_choice(phone: str, msg: str, session: dict):
             
     except Exception as e:
         logger.error(f"First message choice error: {e}", exc_info=True)
+        return jsonify({"status": "error"}), 500
+
+
+def handle_registration_step(phone: str, msg: str, session: dict):
+    """Handle registration flow steps."""
+    try:
+        step = session.get("step")
+        data = session.get("data", {})
+        
+        logger.info(f"Registration step '{step}' for {phone}: {msg[:50]}")
+        
+        if step == "awaiting_name":
+            # Save name and ask for surname
+            data["name"] = msg.strip()
+            session["step"] = "awaiting_surname"
+            session["data"] = data
+            save_session(phone, session["step"], data)
+            
+            whatsapp.send_message(
+                f"Great, *{data['name']}*! 👋\n\n"
+                "Now, what's your *surname*?",
+                phone
+            )
+            return jsonify({"status": "awaiting surname"}), 200
+        
+        elif step == "awaiting_surname":
+            # Save surname and ask for email
+            data["surname"] = msg.strip()
+            session["step"] = "awaiting_email"
+            session["data"] = data
+            save_session(phone, session["step"], data)
+            
+            whatsapp.send_message(
+                "Perfect! 📧\n\n"
+                "Please enter your *email address*:\n\n"
+                "_Example: john@example.com_",
+                phone
+            )
+            return jsonify({"status": "awaiting email"}), 200
+        
+        elif step == "awaiting_email":
+            # Validate email format
+            email = msg.strip().lower()
+            if "@" not in email or "." not in email:
+                whatsapp.send_message(
+                    "⚠️ That doesn't look like a valid email.\n\n"
+                    "Please enter a valid email address:",
+                    phone
+                )
+                return jsonify({"status": "invalid email"}), 200
+            
+            data["email"] = email
+            session["step"] = "awaiting_area"
+            session["data"] = data
+            save_session(phone, session["step"], data)
+            
+            whatsapp.send_message(
+                "Great! 📍\n\n"
+                "What *area/region* are you from?\n\n"
+                "_Example: Harare Central_",
+                phone
+            )
+            return jsonify({"status": "awaiting area"}), 200
+        
+        elif step == "awaiting_area":
+            # Save area and ask for skill
+            data["area"] = msg.strip()
+            session["step"] = "awaiting_skill"
+            session["data"] = data
+            save_session(phone, session["step"], data)
+            
+            whatsapp.send_message(
+                "Almost done! 🛠️\n\n"
+                "What *skill* would you like to contribute?\n\n"
+                "_Examples: Medical, Teaching, Construction, IT, etc._",
+                phone
+            )
+            return jsonify({"status": "awaiting skill"}), 200
+        
+        elif step == "awaiting_skill":
+            # Save skill and complete registration
+            data["skill"] = msg.strip()
+            data["phone"] = phone
+            data["registered_at"] = datetime.now().isoformat()
+            
+            # Save to database
+            try:
+                conn = sqlite3.connect("botdata.db", timeout=10)
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT OR REPLACE INTO volunteers 
+                    (name, surname, phone, email, skill, area, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    data.get("name"),
+                    data.get("surname"),
+                    phone,
+                    data.get("email"),
+                    data.get("skill"),
+                    data.get("area"),
+                    datetime.now().isoformat()
+                ))
+                conn.commit()
+                conn.close()
+                logger.info(f"Volunteer registered: {phone}")
+            except Exception as db_err:
+                logger.error(f"Failed to save volunteer: {db_err}")
+            
+            # Clear session
+            from services.sessions import delete_session
+            delete_session(phone)
+            
+            # Send success message
+            whatsapp.send_message(
+                "🎉 *Registration Complete!*\n\n"
+                f"Welcome to the Runde Rural Clinic Project, *{data['name']} {data['surname']}*!\n\n"
+                "📋 *Your Details:*\n"
+                f"• Email: {data['email']}\n"
+                f"• Area: {data['area']}\n"
+                f"• Skill: {data['skill']}\n\n"
+                "Thank you for volunteering! We'll be in touch soon. 🙏",
+                phone
+            )
+            return jsonify({"status": "registration complete"}), 200
+        
+        else:
+            # Unknown registration step - restart
+            logger.warning(f"Unknown registration step: {step}")
+            whatsapp.send_message(
+                "Sorry, something went wrong with your registration.\n\n"
+                "Type *1* to start registration again, or *2* to make a payment.",
+                phone
+            )
+            session["step"] = "start"
+            save_session(phone, "start", {})
+            return jsonify({"status": "registration reset"}), 200
+        
+    except Exception as e:
+        logger.error(f"Registration step error: {e}", exc_info=True)
+        whatsapp.send_message(
+            "😔 Sorry, an error occurred. Please type *cancel* to start over.",
+            phone
+        )
         return jsonify({"status": "error"}), 500
 
 
