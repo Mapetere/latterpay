@@ -182,7 +182,7 @@ def handle_payment_method_step(phone, msg, session):
         return "payment_method"
     
 
-    whatsapp.create_button()
+
 
     session["data"]["payment_method"] = selected_method
     session["step"] = "payment_number"
