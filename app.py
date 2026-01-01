@@ -600,9 +600,13 @@ def process_user_message(phone: str, name: str, msg: str):
         if session.get("step") == "start" and msg in ["1", "2"]:
             return handle_first_message_choice(phone, msg, session)
         
-        # Check if user is in REGISTRATION flow (steps starting with "awaiting_" or "reg_")
+        # Check if user is in REGISTRATION flow (specific registration steps only)
         step = session.get("step", "")
-        if step.startswith("awaiting_") or step.startswith("reg_"):
+        registration_steps = [
+            "awaiting_name", "awaiting_surname", "awaiting_email", 
+            "awaiting_area", "awaiting_skill", "reg_confirm"
+        ]
+        if step in registration_steps:
             return handle_registration_step(phone, msg, session)
         
         # Update session activity and delegate to DONATION flow handler

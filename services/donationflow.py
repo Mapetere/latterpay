@@ -452,6 +452,16 @@ def handle_amount_step(phone, msg, session):
             whatsapp.send_message("❗ Please enter amount with 0, 1 or 2 decimal places only (e.g. 40, 40.0, or 40.00).", phone)
             return "ok"
 
+        # Check for zero or negative amount
+        if amount <= 0:
+            whatsapp.send_message(
+                "❗ *Invalid Amount*\n\n"
+                "Amount must be greater than zero.\n"
+                "Please enter a valid amount (e.g. 50).",
+                phone
+            )
+            return "ok"
+
         if amount > 480:
             whatsapp.send_message("❗ Maximum amount is 480. Please enter a value that is less or equal to 480.", phone)
             return "ok"
@@ -496,8 +506,39 @@ def handle_donation_type_step(phone, msg, session):
 
 
 
+def normalize_congregation_name(name: str) -> str:
+    """
+    Normalize congregation/region name by:
+    - Removing common suffixes like 'congregation', 'church', 'assembly'
+    - Standardizing capitalization
+    - Removing extra whitespace
+    """
+    if not name:
+        return name
+    
+    # Convert to title case and strip
+    normalized = name.strip().title()
+    
+    # Remove common suffixes (case-insensitive)
+    suffixes_to_remove = [
+        ' Congregation', ' Church', ' Assembly', ' Chapel',
+        ' Parish', ' Ward', ' Branch', ' Zone', ' District'
+    ]
+    for suffix in suffixes_to_remove:
+        if normalized.endswith(suffix):
+            normalized = normalized[:-len(suffix)].strip()
+    
+    # Remove leading "The "
+    if normalized.startswith('The '):
+        normalized = normalized[4:]
+    
+    return normalized
+
+
 def handle_region_step(phone, msg, session):
-    session["data"]["region"] = msg
+    # Normalize the congregation name
+    normalized_region = normalize_congregation_name(msg)
+    session["data"]["region"] = normalized_region
     session["step"] = "donation_type"
     save_session(phone, session["step"], session["data"])
     whatsapp.send_message(
@@ -509,15 +550,33 @@ def handle_region_step(phone, msg, session):
 
 
 def handle_note_step(phone, msg, session):
-    session["data"]["note"] = msg.strip()
+    note = msg.strip()
+    # Handle 'none' or 'no' as empty note
+    if note.lower() in ['none', 'no', 'n/a', '-', 'nil']:
+        note = 'None'
+    session["data"]["note"] = note
     session["step"] = "awaiting_confirmation"
     summary = session["data"]
     save_session(phone, session["step"], session["data"])
+    
+    # Currency symbol
+    currency = summary.get('currency', 'ZWG')
+    currency_symbol = '$' if currency == 'USD' else 'ZWG '
+    
     whatsapp.send_message(
-        f"PAYMENT DETAILS:\n\n"
-        f"*Name:* {summary['name']}\n*Amount:* {summary['amount']}\n"
-        f"*Purpose:* {summary['donation_type']}\n*Region:* {summary['region']}\n*Note:* {summary['note']}\n\n"
-        "Type *confirm* to proceed or *edit* to change any detail.",
+        f"📋 *PAYMENT SUMMARY*\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"👤 *Name:* {summary.get('name', 'N/A')}\n"
+        f"🏛️ *Congregation:* {summary.get('region', 'N/A')}\n"
+        f"🎯 *Purpose:* {summary.get('donation_type', 'N/A')}\n"
+        f"💰 *Amount:* {currency_symbol}{summary.get('amount', 0)}\n"
+        f"📝 *Note:* {summary.get('note', 'None')}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"✅ *Reply with:*\n"
+        f"• Type *confirm* to proceed to payment\n"
+        f"• Type *edit* to change any details\n"
+        f"• Type *cancel* to abort\n\n"
+        f"_What would you like to do?_",
         phone
     )
     return "ok"
