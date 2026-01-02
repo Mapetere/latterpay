@@ -549,12 +549,12 @@ class StreamlinedFlow:
         
         session["data"]["payment_phone"] = formatted
         
-        # Save user profile for future quick donations
+        # Save user profile for future quick donations (this is OK - just saves name/congregation)
         self.conversation.save_user_from_session(phone, session["data"])
         
-        # Update user's donation stats
-        amount = session["data"].get("amount", 0)
-        self.memory.update_donation_stats(phone, amount)
+        # NOTE: Do NOT update donation stats here!
+        # Stats should ONLY be updated after Paynow confirms payment as "paid"
+        # The background polling in donationflow.py handles this correctly
         
         # Hand off to payment processor
         # For now, send confirmation and set step for existing handler

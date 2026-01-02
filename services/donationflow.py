@@ -219,6 +219,14 @@ def handle_payment_number_step(phone, msg, session):
                     from services.payment_history import record_payment
                     if session.get("data"):
                         record_payment(session["data"])
+                        
+                        # NOW update user donation stats (only after payment confirmed!)
+                        try:
+                            from services.smart_conversation import user_memory
+                            amount = float(session["data"].get("amount", 0))
+                            user_memory.update_donation_stats(phone, amount)
+                        except Exception as stats_err:
+                            logger.warning(f"Failed to update user stats: {stats_err}")
                     
                     whatsapp.send_message(
                         "✅ *Payment Confirmed!*\n\n"
