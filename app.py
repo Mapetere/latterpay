@@ -1,11 +1,15 @@
 """
 LatterPay - WhatsApp Donation & Registration Service
 =====================================================
-Production-grade WhatsApp bot with end-to-end encryption,
-resilience patterns, and comprehensive error handling.
+Production-grade WhatsApp bot with:
+- Natural Language Understanding
+- Smart Conversation Memory
+- Interactive Buttons & Lists
+- Streamlined Data Collection
+- End-to-end encryption support
 
 Author: Nyasha Mapetere
-Version: 2.0.0 (Upgraded with Advanced Resilience)
+Version: 3.0.0 (Smart Conversation Engine)
 """
 
 from flask import Flask, request, jsonify, g
@@ -42,6 +46,15 @@ from services.sessions import (
 )
 from services.donationflow import handle_user_message
 from services.sessions import monitor_sessions
+
+# Import streamlined flow (v3.0 smart conversation)
+try:
+    from services.streamlined_flow import streamlined_flow
+    from services.enhanced_whatsapp import enhanced_whatsapp
+    SMART_FLOW_ENABLED = True
+except ImportError as e:
+    logger.warning(f"Smart flow not available: {e}")
+    SMART_FLOW_ENABLED = False
 
 # Import resilience module (with fallback if not available)
 try:
@@ -522,6 +535,7 @@ def handle_whatsapp_message(data: dict):
         
         msg_id = msg_data.get("id")
         msg_from = msg_data.get("from")
+        msg_type = msg_data.get("type", "text")
         
         # Skip echo/duplicate messages
         if is_echo_message(msg_id):
@@ -540,19 +554,53 @@ def handle_whatsapp_message(data: dict):
         # Save message ID to prevent reprocessing
         save_sent_message_id(msg_id)
         
-        # Extract message details
+        # Extract message content based on type
         phone = whatsapp.get_mobile(data)
         name = whatsapp.get_name(data)
-        msg = whatsapp.get_message(data).strip()
         
-        logger.info(f"Message from {phone} ({name}): '{msg[:100]}'")
+        # Handle interactive responses (button/list replies)
+        if msg_type == "interactive":
+            interactive = msg_data.get("interactive", {})
+            interactive_type = interactive.get("type")
+            if interactive_type == "button_reply":
+                msg = interactive.get("button_reply", {}).get("id", "")
+            elif interactive_type == "list_reply":
+                msg = interactive.get("list_reply", {}).get("id", "")
+            else:
+                msg = ""
+        else:
+            msg = whatsapp.get_message(data).strip()
         
-        # Process message
-        return process_user_message(phone, name, msg)
+        logger.info(f"Message from {phone} ({name}): '{msg[:100]}' [type={msg_type}]")
+        
+        # Use the streamlined smart flow if enabled
+        if SMART_FLOW_ENABLED:
+            return process_smart_message(phone, name, msg, data)
+        else:
+            return process_user_message(phone, name, msg)
         
     except Exception as e:
         logger.error(f"WhatsApp message handling error: {e}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+def process_smart_message(phone: str, name: str, msg: str, raw_data: dict = None):
+    """
+    Process message using the smart conversation engine.
+    This provides:
+    - Natural language understanding
+    - User memory for returning donors
+    - Interactive button/list support
+    - Streamlined data collection
+    """
+    try:
+        result = streamlined_flow.handle_message(phone, msg, raw_data)
+        logger.debug(f"Smart flow result for {phone}: {result}")
+        return jsonify({"status": result}), 200
+    except Exception as e:
+        logger.error(f"Smart flow error for {phone}: {e}", exc_info=True)
+        # Fallback to classic flow
+        return process_user_message(phone, name, msg)
 
 
 def process_user_message(phone: str, name: str, msg: str):
