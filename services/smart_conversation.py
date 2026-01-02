@@ -35,17 +35,28 @@ class UserProfile:
     email: str = ""
     preferred_currency: str = "ZWG"
     preferred_payment_method: str = "EcoCash"
-    total_donations: float = 0.0
+    # Separate totals by currency
+    total_usd: float = 0.0
+    total_zwg: float = 0.0
     donation_count: int = 0
     last_donation_date: Optional[str] = None
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     last_seen: str = field(default_factory=lambda: datetime.now().isoformat())
+    
+    @property
+    def total_donations(self) -> float:
+        """Total across all currencies (for backward compatibility)."""
+        return self.total_usd + self.total_zwg
     
     def to_dict(self) -> Dict:
         return asdict(self)
     
     @classmethod
     def from_dict(cls, data: Dict) -> 'UserProfile':
+        # Handle legacy 'total_donations' field
+        if 'total_donations' in data and 'total_usd' not in data:
+            # Migrate old data - assume it was ZWG
+            data['total_zwg'] = data.pop('total_donations', 0)
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
@@ -69,13 +80,25 @@ class UserMemory:
                     email TEXT,
                     preferred_currency TEXT DEFAULT 'ZWG',
                     preferred_payment_method TEXT DEFAULT 'EcoCash',
-                    total_donations REAL DEFAULT 0,
+                    total_usd REAL DEFAULT 0,
+                    total_zwg REAL DEFAULT 0,
                     donation_count INTEGER DEFAULT 0,
                     last_donation_date TEXT,
                     created_at TEXT,
                     last_seen TEXT
                 )
             """)
+            
+            # Migrate old schema if needed (add new columns if they don't exist)
+            try:
+                cursor.execute("ALTER TABLE user_profiles ADD COLUMN total_usd REAL DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            try:
+                cursor.execute("ALTER TABLE user_profiles ADD COLUMN total_zwg REAL DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            
             conn.commit()
             conn.close()
         except Exception as e:
@@ -106,13 +129,13 @@ class UserMemory:
             cursor.execute("""
                 INSERT OR REPLACE INTO user_profiles 
                 (phone, name, congregation, email, preferred_currency, 
-                 preferred_payment_method, total_donations, donation_count,
+                 preferred_payment_method, total_usd, total_zwg, donation_count,
                  last_donation_date, created_at, last_seen)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 profile.phone, profile.name, profile.congregation, profile.email,
                 profile.preferred_currency, profile.preferred_payment_method,
-                profile.total_donations, profile.donation_count,
+                profile.total_usd, profile.total_zwg, profile.donation_count,
                 profile.last_donation_date, profile.created_at,
                 datetime.now().isoformat()
             ))
@@ -122,11 +145,14 @@ class UserMemory:
         except Exception as e:
             logger.error(f"Failed to save profile: {e}")
     
-    def update_donation_stats(self, phone: str, amount: float):
-        """Update user's donation statistics."""
+    def update_donation_stats(self, phone: str, amount: float, currency: str = "ZWG"):
+        """Update user's donation statistics with currency-specific totals."""
         profile = self.get_profile(phone)
         if profile:
-            profile.total_donations += amount
+            if currency.upper() == "USD":
+                profile.total_usd += amount
+            else:
+                profile.total_zwg += amount
             profile.donation_count += 1
             profile.last_donation_date = datetime.now().isoformat()
             self.save_profile(profile)
@@ -317,13 +343,22 @@ class SmartConversation:
             name = profile.name.split()[0]  # First name only
             
             if profile.donation_count > 0:
-                # Has donated before
-                last_date = profile.last_donation_date
+                # Has donated before - show currency-specific totals
+                totals_parts = []
+                if profile.total_usd > 0:
+                    totals_parts.append(f"*${profile.total_usd:.2f} USD*")
+                if profile.total_zwg > 0:
+                    totals_parts.append(f"*ZWG {profile.total_zwg:.2f}*")
+                
+                if totals_parts:
+                    totals_text = " and ".join(totals_parts)
+                else:
+                    totals_text = "*$0.00*"
+                
                 greeting = (
                     f"{time_greeting} {name}! 👋\n\n"
                     f"Welcome back to *LatterPay*!\n"
-                    f"You've made *{profile.donation_count}* donations totaling "
-                    f"*{profile.preferred_currency} {profile.total_donations:.2f}*.\n\n"
+                    f"You've made *{profile.donation_count}* donation(s) totaling {totals_text}.\n\n"
                     f"🙏 Thank you for your continued support!"
                 )
             else:
@@ -337,6 +372,7 @@ class SmartConversation:
                 f"{time_greeting}! 👋\n\n"
                 f"Welcome to *LatterPay* - your trusted donation platform.\n\n"
                 f"I'm here to help you make contributions quickly and securely."
+                f"\n_Maximum per transaction: 480 (for both USD & ZWG)_"
             )
         
         return greeting, profile

@@ -144,6 +144,7 @@ class StreamlinedFlow:
             "collect_info": self._handle_collect_info,
             "awaiting_purpose": self._handle_purpose_selection,
             "awaiting_amount": self._handle_amount_input,
+            "confirm_split_amount": self._handle_split_amount_confirmation,
             "awaiting_currency": self._handle_currency_selection,
             "awaiting_confirmation": self._handle_confirmation,
             "awaiting_payment_method": self._handle_payment_method,
@@ -422,13 +423,46 @@ class StreamlinedFlow:
             )
             return "amount_invalid"
         
-        if amount > 480:
+        MAX_PER_TRANSACTION = 480
+        
+        if amount > MAX_PER_TRANSACTION:
+            # Calculate how many transactions needed
+            num_transactions = int(amount // MAX_PER_TRANSACTION)
+            remainder = amount % MAX_PER_TRANSACTION
+            if remainder > 0:
+                num_transactions += 1
+            
+            # Build helpful message
+            transactions_breakdown = []
+            remaining = amount
+            tx_num = 1
+            while remaining > 0:
+                tx_amount = min(remaining, MAX_PER_TRANSACTION)
+                transactions_breakdown.append(f"• Transaction {tx_num}: *{tx_amount:.2f}*")
+                remaining -= tx_amount
+                tx_num += 1
+            
+            breakdown_text = "\n".join(transactions_breakdown)
+            
             whatsapp.send_message(
-                "❌ Maximum amount per transaction is *480*.\n"
-                "Please enter a smaller amount:",
+                f"💡 *Large Donation Detected!*\n\n"
+                f"Your total: *{amount:.2f}*\n"
+                f"Maximum per transaction: *{MAX_PER_TRANSACTION}*\n\n"
+                f"You'll need *{num_transactions} transactions*:\n"
+                f"{breakdown_text}\n\n"
+                f"Let's start with the first *{MAX_PER_TRANSACTION:.2f}*.\n"
+                f"_You can repeat the process for the remaining amount._\n\n"
+                f"Reply *yes* to continue or enter a different amount:",
                 phone
             )
-            return "amount_too_high"
+            
+            # Store the full amount and first transaction amount
+            session["data"]["full_amount"] = amount
+            session["data"]["pending_amount"] = amount - MAX_PER_TRANSACTION
+            session["data"]["amount"] = MAX_PER_TRANSACTION
+            session["step"] = "confirm_split_amount"
+            save_session(phone, session["step"], session["data"])
+            return "split_amount_offered"
         
         session["data"]["amount"] = amount
         
@@ -441,6 +475,36 @@ class StreamlinedFlow:
         else:
             # Skip to confirmation
             return self._send_confirmation(phone, session)
+    
+    def _handle_split_amount_confirmation(self, phone: str, message: str, session: Dict) -> str:
+        """Handle confirmation of split amount for large donations."""
+        msg = message.lower().strip()
+        
+        if msg in ["yes", "y", "ok", "continue", "proceed"]:
+            # Continue with the first 480
+            if "currency" not in session["data"]:
+                session["step"] = "awaiting_currency"
+                save_session(phone, session["step"], session["data"])
+                enhanced_whatsapp.send_currency_selection(phone)
+                return "currency_prompt_sent"
+            else:
+                return self._send_confirmation(phone, session)
+        else:
+            # Try to parse as a new amount
+            try:
+                new_amount = float(msg.replace(",", "."))
+                if new_amount > 0:
+                    session["step"] = "awaiting_amount"
+                    save_session(phone, session["step"], session["data"])
+                    return self._handle_amount_input(phone, msg, session)
+            except ValueError:
+                pass
+            
+            whatsapp.send_message(
+                "Please reply *yes* to continue with 480, or enter a different amount:",
+                phone
+            )
+            return "split_amount_retry"
     
     def _handle_currency_selection(self, phone: str, message: str, session: Dict) -> str:
         """Handle currency selection."""

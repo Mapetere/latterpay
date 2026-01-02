@@ -224,7 +224,8 @@ def handle_payment_number_step(phone, msg, session):
                         try:
                             from services.smart_conversation import user_memory
                             amount = float(session["data"].get("amount", 0))
-                            user_memory.update_donation_stats(phone, amount)
+                            currency = session["data"].get("currency", "ZWG")
+                            user_memory.update_donation_stats(phone, amount, currency)
                         except Exception as stats_err:
                             logger.warning(f"Failed to update user stats: {stats_err}")
                     
