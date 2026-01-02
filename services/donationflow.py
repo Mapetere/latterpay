@@ -206,28 +206,25 @@ def handle_payment_number_step(phone, msg, session):
         
         for _ in range(40):  # poll for ~200 seconds
             try:
+                # Check if session still exists (user might have cancelled or manually checked)
+                session = load_session(phone)
+                if not session or session.get("poll_url") != poll_url:
+                    logger.debug(f"Background polling stopped for {phone} - session changed or cleared.")
+                    return
+
                 status_obj = paynow.check_transaction_status(poll_url)
                 status = status_obj.status.lower()
                 
                 if status == "paid":
-                    # Record payment in history and analytics
                     from services.payment_history import record_payment
-                    from services.notifications import NotificationService
-                    
-                    # Get session data for recording
-                    session = load_session(phone)
-                    if session and session.get("data"):
+                    if session.get("data"):
                         record_payment(session["data"])
                     
-                    # Notify user
                     whatsapp.send_message(
                         "✅ *Payment Confirmed!*\n\n"
-                        "Your donation has been successfully processed. "
-                        "Thank you for your generous contribution! 🙏",
+                        "Your donation has been successfully processed. Thank you! 🙏",
                         phone
                     )
-                    
-                    # Clear session
                     from services.sessions import delete_session
                     delete_session(phone)
                     return
@@ -236,13 +233,14 @@ def handle_payment_number_step(phone, msg, session):
                     warning_msg = "⚠️ *Payment Cancelled*" if status == "cancelled" else "❌ *Payment Failed*"
                     whatsapp.send_message(
                         f"{warning_msg}\n\n"
-                        f"The transaction was {status}. You can try again by entering your EcoCash number below or type *cancel* to stop.",
+                        f"The transaction was {status}. You can try again by entering your mobile number or type *cancel*.",
                         phone
                     )
-                    # Stay in payment_number step to allow retry
+                    # Clear poll_url to allow retry
+                    session["poll_url"] = None
+                    save_session(phone, session["step"], session["data"])
                     return
 
-                # If still pending, wait and continue loop
                 time.sleep(5)
                 
             except Exception as e:
@@ -250,9 +248,45 @@ def handle_payment_number_step(phone, msg, session):
                 time.sleep(10)
 
 
-    raw = msg.strip()
+    raw = msg.strip().lower()
 
-    
+    # Handle 'check' command to manually trigger a status check
+    if raw.startswith("check"):
+        poll_url = session.get("poll_url")
+        if not poll_url:
+            whatsapp.send_message("❌ No active payment found to check. Please enter your mobile number to start.", phone)
+            return "ok"
+            
+        currency = session["data"].get("currency", "ZWG")
+        from services.config import paynow_config
+        int_id, int_key = paynow_config.get_integration(currency)
+        paynow_client = Paynow(int_id, int_key, paynow_config.return_url, paynow_config.result_url)
+        
+        status_obj = paynow_client.check_transaction_status(poll_url)
+        status = status_obj.status.lower()
+        
+        if status == "paid":
+             whatsapp.send_message("✅ *Payment Confirmed!* Thank you for your contribution. 🙏", phone)
+             from services.sessions import delete_session
+             delete_session(phone)
+        elif status in ["cancelled", "failed"]:
+             whatsapp.send_message(f"❌ *Payment {status.title()}*. You can try again by entering your EcoCash number.", phone)
+        else:
+             whatsapp.send_message("⏳ *Still Pending*. Please approve the request on your phone. Type *check* again in a moment.", phone)
+        return "ok"
+
+    # Avoid duplicate initiation if they send a number (or anything else) while one is active
+    if session.get("poll_url"):
+         whatsapp.send_message(
+             "⏳ *Payment in Progress*\n\n"
+             "You already have a pending payment request. Please:\n"
+             "1. Approve it on your phone\n"
+             "2. Type *check* to verify status\n"
+             "3. Type *cancel* if you want to start a new one", 
+             phone
+         )
+         return "ok"
+
     if raw.startswith("0") and len(raw) == 10:
         formatted = "263" + raw[1:]
     elif raw.startswith("263") and len(raw) == 12:
