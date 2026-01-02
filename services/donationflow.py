@@ -200,20 +200,55 @@ def handle_payment_number_step(phone, msg, session):
     import time
 
     def poll_payment_status(phone, poll_url, paynow):
-        for _ in range(30):  # try for 30 * 5 sec = 150 sec max or whatever timeout you want
-            status = paynow.check_transaction_status(poll_url).status
-            if status in ["paid", "cancelled", "failed"]:
-                # Send immediate message
-                if status == "failed":
-                    whatsapp.send_message("❌ Payment failed. Please try again or use a different method.", phone)
-                elif status == "cancelled":
-                    whatsapp.send_message("⚠️ Payment was cancelled. You can try again.", phone)
-                elif status == "paid":
-                    whatsapp.send_message("✅ Payment was successful!\n" \
-                    "Your payment has been recorded. Thank you for using latterpay",phone)
+        """Background thread to poll payment status and notify user on completion."""
+        # Initial wait to give user time to see the first message and interact with their phone
+        time.sleep(10)
+        
+        for _ in range(40):  # poll for ~200 seconds
+            try:
+                status_obj = paynow.check_transaction_status(poll_url)
+                status = status_obj.status.lower()
+                
+                if status == "paid":
+                    # Record payment in history and analytics
+                    from services.payment_history import record_payment
+                    from services.notifications import NotificationService
+                    
+                    # Get session data for recording
+                    session = load_session(phone)
+                    if session and session.get("data"):
+                        record_payment(session["data"])
+                    
+                    # Notify user
+                    whatsapp.send_message(
+                        "✅ *Payment Confirmed!*\n\n"
+                        "Your donation has been successfully processed. "
+                        "Thank you for your generous contribution! 🙏",
+                        phone
+                    )
+                    
+                    # Clear session
+                    from services.sessions import delete_session
+                    delete_session(phone)
+                    return
 
-                break
-            time.sleep(5)  # wait before checking again
+                elif status in ["cancelled", "failed"]:
+                    warning_msg = "⚠️ *Payment Cancelled*" if status == "cancelled" else "❌ *Payment Failed*"
+                    whatsapp.send_message(
+                        f"{warning_msg}\n\n"
+                        f"The transaction was {status}. You can try again by entering your EcoCash number below or type *cancel* to stop.",
+                        phone
+                    )
+                    # Stay in payment_number step to allow retry
+                    return
+
+                # If still pending, wait and continue loop
+                time.sleep(5)
+                
+            except Exception as e:
+                logger.error(f"Error in background polling for {phone}: {e}")
+                time.sleep(10)
+
 
     raw = msg.strip()
 
@@ -252,21 +287,17 @@ def handle_payment_number_step(phone, msg, session):
 
     
     currency = session["data"].get("currency", "ZWG")
-    if currency == "USD":
-        paynow = Paynow(
-                "21116",
-                "f6cb151e-10df-45cf-a504-d5dff25249cb",
-                "https://latterpay-production.up.railway.app/payment-return",
-                "https://latterpay-production.up.railway.app/payment-result"
+    from services.config import paynow_config
+    
+    # Use config instead of hardcoded values
+    int_id, int_key = paynow_config.get_integration(currency)
+    paynow = Paynow(
+        int_id,
+        int_key,
+        paynow_config.return_url,
+        paynow_config.result_url
+    )
 
-        )
-    else:
-       paynow = Paynow(
-                "21227",
-                "c77acfad-18b5-4e24-a94d-23e8ba122302",
-                "https://latterpay-production.up.railway.app/payment-return",
-                "https://latterpay-production.up.railway.app/payment-result"
-            )    
     
     donation_desc = session["data"].get("donation_type", "Donation")
     payment = paynow.create_payment("Order", "mapeterenyasha@gmail.com")
@@ -314,31 +345,10 @@ def handle_payment_number_step(phone, msg, session):
 
 
 
-    def poll_once(paynow, poll_url):
-        status = paynow.check_transaction_status(poll_url)
-        return status.status
-
-    result = poll_once(paynow, poll_url)
-
-
-    if result == "paid":
-        record_payment(session["data"])
-        send_payment_report_to_finance()
-        whatsapp.send_message("✅ Payment confirmed! Your donation has been recorded. Thank you 🙏", phone)
-        delete_session(phone)
-
-    elif result == "cancelled":
-        whatsapp.send_message("⚠️ Payment was cancelled. Type *confirm* to try again.", phone)
-        session["step"] = "awaiting_confirmation"
-        save_session(phone, session["step"], session["data"])
-    elif result == "failed":
-        whatsapp.send_message("❌ Payment failed. Please try again or use a different method.", phone)
-        session["step"] = "awaiting_confirmation"
-        save_session(phone, session["step"], session["data"])
-    else:
-        whatsapp.send_message("⏳ Payment still processing. Please wait a minute and type *check* again.", phone)
-
+    # Removed immediate polling to prevent duplicate 'still processing' messages.
+    # The background thread will notify the user on completion.
     return "ok"
+
 
 
 
