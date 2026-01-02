@@ -8,7 +8,7 @@ A modern, streamlined conversation handler that:
 - Uses interactive buttons where possible
 - Provides personalized experiences
 
-Author: Nyasha Mapetere
+Author: Nyasha Praise Mapetere
 Version: 3.0.0
 """
 
@@ -364,31 +364,25 @@ class StreamlinedFlow:
             # User is just providing new congregation
             session["data"]["region"] = self._normalize_congregation(parts[0])
             
-            # Move to purpose selection
-            session["step"] = "awaiting_purpose"
-            save_session(phone, session["step"], session["data"])
-            
             whatsapp.send_message(
                 f"Got it! Donating from *{session['data']['region']}* today. ✅",
                 phone
             )
-            enhanced_whatsapp.send_donation_purposes(phone)
-            return "purpose_prompt_sent"
+            
+            # Check what we already have and skip accordingly
+            return self._proceed_after_info_collected(phone, session)
         
         elif len(parts) >= 2:
             session["data"]["name"] = parts[0].title()
             session["data"]["region"] = self._normalize_congregation(parts[1])
             
-            # Move to purpose selection
-            session["step"] = "awaiting_purpose"
-            save_session(phone, session["step"], session["data"])
-            
             whatsapp.send_message(
                 f"Thanks, *{session['data']['name']}* from *{session['data']['region']}*! ✅",
                 phone
             )
-            enhanced_whatsapp.send_donation_purposes(phone)
-            return "purpose_prompt_sent"
+            
+            # Check what we already have and skip accordingly
+            return self._proceed_after_info_collected(phone, session)
         
         elif len(parts) == 1:
             # Check if this looks like a real name (not a command or number)
@@ -421,6 +415,53 @@ class StreamlinedFlow:
             )
             return "collect_info_retry"
     
+    def _proceed_after_info_collected(self, phone: str, session: Dict) -> str:
+        """Determine next step after name/congregation collected, skipping steps if data exists."""
+        has_purpose = session.get("data", {}).get("donation_type")
+        has_amount = session.get("data", {}).get("amount")
+        has_currency = session.get("data", {}).get("currency")
+        
+        if has_purpose and has_amount:
+            # Both exist - skip to currency or confirmation
+            if has_currency:
+                return self._send_confirmation(phone, session)
+            else:
+                session["step"] = "awaiting_currency"
+                save_session(phone, session["step"], session["data"])
+                enhanced_whatsapp.send_currency_selection(phone)
+                return "currency_prompt"
+        
+        elif has_purpose:
+            # Have purpose but need amount
+            session["step"] = "awaiting_amount"
+            save_session(phone, session["step"], session["data"])
+            whatsapp.send_message(
+                f"*{has_purpose}* - got it! ✅\n\n"
+                "💰 How much would you like to donate?\n\n"
+                "Just type the amount (e.g., *50* or *100*)\n"
+                "_Maximum: Both ZWG and USD is 480_",
+                phone
+            )
+            return "amount_prompt"
+        
+        elif has_amount:
+            # Have amount but need purpose
+            session["step"] = "awaiting_purpose"
+            save_session(phone, session["step"], session["data"])
+            whatsapp.send_message(
+                f"Amount: *{has_amount}* - got it! ✅",
+                phone
+            )
+            enhanced_whatsapp.send_donation_purposes(phone)
+            return "purpose_prompt"
+        
+        else:
+            # Need both - go to purpose first
+            session["step"] = "awaiting_purpose"
+            save_session(phone, session["step"], session["data"])
+            enhanced_whatsapp.send_donation_purposes(phone)
+            return "purpose_prompt"
+    
     def _handle_purpose_selection(self, phone: str, message: str, session: Dict) -> str:
         """Handle donation purpose selection."""
         msg = message.lower().strip()
@@ -438,15 +479,11 @@ class StreamlinedFlow:
             session["step"] = "awaiting_amount"
             save_session(phone, session["step"], session["data"])
             
-            # Ask for amount with smart prompt
-            currency = session["data"].get("currency", "ZWG")
-            symbol = "$" if currency == "USD" else "ZWG "
-            
             whatsapp.send_message(
                 f"*{purpose}* selected ✅\n\n"
                 f"💰 How much would you like to donate?\n\n"
                 f"Just type the amount (e.g., *50* or *100*)\n"
-                f"_Maximum: {symbol}480 per transaction_",
+                f"_Maximum: Both ZWG and USD is 480_",
                 phone
             )
             return "amount_prompt_sent"
@@ -813,7 +850,7 @@ class StreamlinedFlow:
             "_\"donate 50 for conference\"_\n"
             "_\"100 monthly contribution\"_\n\n"
             "*Need Support?*\n"
-            "Contact: support@latterpay.com\n\n"
+            "Contact: nyashamapetere@gmailcom\n\n"
             "━━━━━━━━━━━━━━━━━━━━",
             phone
         )
