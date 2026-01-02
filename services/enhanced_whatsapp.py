@@ -69,10 +69,10 @@ class EnhancedWhatsApp:
     
     # Logo URL - host your logo and put the URL here
     # Can also use WhatsApp Media ID format: {"id": "media_id"}
-    # Using the cropped banner showing just "LATTERPAY" text
+    # Using tightly cropped circular logo
     LOGO_URL = os.getenv(
         "LATTERPAY_LOGO_URL", 
-        "https://latterpay-production.up.railway.app/static/latterpay_banner.png"
+        "https://latterpay-production.up.railway.app/static/latterpay_logo.png"
     )
     
     def send_interactive_buttons(

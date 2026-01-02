@@ -372,7 +372,6 @@ class SmartConversation:
                 f"{time_greeting}! 👋\n\n"
                 f"Welcome to *LatterPay* - your trusted donation platform.\n\n"
                 f"I'm here to help you make contributions quickly and securely."
-                f"\n_Maximum per transaction: 480 (for both USD & ZWG)_"
             )
         
         return greeting, profile
