@@ -132,7 +132,10 @@ class StreamlinedFlow:
         if msg_lower in ["help", "?", "action_help", "quick_help"]:
             return self._send_help(phone)
         if msg_lower == "menu":
-            return self._send_main_menu(phone)
+            # Reset session and show smart menu
+            delete_session(phone)
+            session = {"step": "start", "data": {}}
+            return self._handle_start(phone, message, session)
         
         # Route to appropriate handler
         handler_map = {
@@ -197,12 +200,21 @@ class StreamlinedFlow:
         """Handle main menu action selection."""
         msg = message.lower().strip()
         
+        # Check if user is returning (has saved data in session)
+        has_saved_data = session.get("data", {}).get("name") and session.get("data", {}).get("region")
+        
         # Quick donate for returning users
-        if msg in ["quick_yes", "quick", "1", "action_donate", "donate"]:
-            if session.get("is_returning"):
-                # Skip to purpose selection
+        if msg in ["quick_yes", "quick", "action_donate", "donate"]:
+            if has_saved_data:
+                # Returning user with saved data - skip straight to purpose!
                 session["step"] = "awaiting_purpose"
                 save_session(phone, session["step"], session["data"])
+                
+                name = session["data"].get("name", "")
+                whatsapp.send_message(
+                    f"Great, *{name}*! Let's continue with your saved details. ✅",
+                    phone
+                )
                 enhanced_whatsapp.send_donation_purposes(phone)
                 return "purpose_prompt_sent"
             else:
@@ -217,17 +229,28 @@ class StreamlinedFlow:
                 )
                 return "collect_info_prompt"
         
-        elif msg in ["quick_new", "new", "action_donate"]:
-            # User wants to enter new details
+        elif msg in ["quick_new", "new"]:
+            # User wants to donate from a DIFFERENT congregation
             session["step"] = "collect_info"
-            session["data"] = {}  # Clear saved data
+            # Keep name but clear congregation
+            saved_name = session.get("data", {}).get("name", "")
+            session["data"] = {"name": saved_name} if saved_name else {}
             save_session(phone, session["step"], session["data"])
-            whatsapp.send_message(
-                "No problem! Let's start fresh. 📝\n\n"
-                "Please tell me your *full name* and *congregation* in one message.\n\n"
-                "_Example: John Moyo, Harare Central_",
-                phone
-            )
+            
+            if saved_name:
+                whatsapp.send_message(
+                    f"No problem, *{saved_name}*! 📝\n\n"
+                    "Which *congregation* are you donating from today?\n\n"
+                    "_Just type the congregation name_",
+                    phone
+                )
+            else:
+                whatsapp.send_message(
+                    "Let's start fresh! 📝\n\n"
+                    "Please tell me your *full name* and *congregation* in one message.\n\n"
+                    "_Example: John Moyo, Harare Central_",
+                    phone
+                )
             return "collect_info_prompt"
         
         elif msg in ["action_register", "register", "2"]:
@@ -284,10 +307,28 @@ class StreamlinedFlow:
     
     def _handle_collect_info(self, phone: str, message: str, session: Dict) -> str:
         """Handle combined name + congregation collection."""
-        # Parse the input - expecting "Name, Congregation" or similar
+        # Check if we already have name (returning user changing congregation)
+        existing_name = session.get("data", {}).get("name")
+        
+        # Parse the input
         parts = [p.strip() for p in message.replace(" and ", ", ").split(",") if p.strip()]
         
-        if len(parts) >= 2:
+        if existing_name and len(parts) >= 1:
+            # User is just providing new congregation
+            session["data"]["region"] = self._normalize_congregation(parts[0])
+            
+            # Move to purpose selection
+            session["step"] = "awaiting_purpose"
+            save_session(phone, session["step"], session["data"])
+            
+            whatsapp.send_message(
+                f"Got it! Donating from *{session['data']['region']}* today. ✅",
+                phone
+            )
+            enhanced_whatsapp.send_donation_purposes(phone)
+            return "purpose_prompt_sent"
+        
+        elif len(parts) >= 2:
             session["data"]["name"] = parts[0].title()
             session["data"]["region"] = self._normalize_congregation(parts[1])
             

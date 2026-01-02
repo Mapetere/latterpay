@@ -272,10 +272,10 @@ class EnhancedWhatsApp:
             body=profile_summary,
             buttons=[
                 {"id": "quick_yes", "title": "⚡ Quick Donate"},
-                {"id": "quick_new", "title": "📝 New Details"},
+                {"id": "quick_new", "title": "🏛️ Diff. Congregation"},
                 {"id": "quick_help", "title": "❓ Help"}
             ],
-            header="⚡ Quick Donate"
+            header="⚡ Welcome Back!"
         )
     
     # ========================================================================
