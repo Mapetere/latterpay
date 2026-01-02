@@ -307,11 +307,57 @@ class StreamlinedFlow:
     # ========================================================================
     
     def _handle_collect_info(self, phone: str, message: str, session: Dict) -> str:
-        """Handle combined name + congregation collection."""
+        """Handle combined name + congregation collection with NLU support."""
+        # First, try NLU to see if user is giving us donation info instead of name
+        parsed = self.nlu.parse(message)
+        
+        # Check if they gave us an amount or purpose instead of name/congregation
+        if parsed.entities.get("amount") or parsed.entities.get("donation_type"):
+            # User said something like "donate 50 for conference"
+            # Extract what we can and merge into session
+            if parsed.entities.get("amount"):
+                session["data"]["amount"] = parsed.entities["amount"]
+            if parsed.entities.get("donation_type"):
+                session["data"]["donation_type"] = parsed.entities["donation_type"]
+            if parsed.entities.get("currency"):
+                session["data"]["currency"] = parsed.entities["currency"]
+            
+            # Check what's still missing
+            has_name = session.get("data", {}).get("name")
+            has_region = session.get("data", {}).get("region")
+            has_amount = session.get("data", {}).get("amount")
+            has_purpose = session.get("data", {}).get("donation_type")
+            
+            if has_name and has_region:
+                # User already known, got amount/purpose - skip to currency or confirm
+                if has_amount and has_purpose:
+                    if "currency" not in session["data"]:
+                        session["step"] = "awaiting_currency"
+                        save_session(phone, session["step"], session["data"])
+                        enhanced_whatsapp.send_currency_selection(phone)
+                        return "currency_prompt"
+                    else:
+                        return self._send_confirmation(phone, session)
+                elif has_amount:
+                    session["step"] = "awaiting_purpose"
+                    save_session(phone, session["step"], session["data"])
+                    enhanced_whatsapp.send_donation_purposes(phone)
+                    return "purpose_prompt"
+            else:
+                # Still need name/congregation
+                save_session(phone, session["step"], session["data"])
+                whatsapp.send_message(
+                    f"Got it! Amount: *{session['data'].get('amount', '?')}*\n\n"
+                    "Now please tell me your *name* and *congregation*:\n"
+                    "_Example: John Moyo, Harare Central_",
+                    phone
+                )
+                return "still_need_info"
+        
         # Check if we already have name (returning user changing congregation)
         existing_name = session.get("data", {}).get("name")
         
-        # Parse the input
+        # Parse the input as "Name, Congregation"
         parts = [p.strip() for p in message.replace(" and ", ", ").split(",") if p.strip()]
         
         if existing_name and len(parts) >= 1:
@@ -345,8 +391,21 @@ class StreamlinedFlow:
             return "purpose_prompt_sent"
         
         elif len(parts) == 1:
-            # Only got one piece - assume it's the name
+            # Check if this looks like a real name (not a command or number)
+            text = parts[0].lower()
+            if any(word in text for word in ['donate', 'pay', 'give', 'help', 'menu', 'cancel']):
+                # This is a command, not a name
+                whatsapp.send_message(
+                    "I need your details first!\n\n"
+                    "Please provide your *name* and *congregation*:\n"
+                    "_Example: John Moyo, Harare Central_",
+                    phone
+                )
+                return "collect_info_retry"
+            
+            # Assume it's the name
             session["data"]["name"] = parts[0].title()
+            save_session(phone, session["step"], session["data"])
             whatsapp.send_message(
                 f"Thanks, *{session['data']['name']}*!\n\n"
                 "Now please tell me your *congregation* or area:",
