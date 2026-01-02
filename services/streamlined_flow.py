@@ -280,23 +280,70 @@ class StreamlinedFlow:
                 # They mentioned donating or an amount
                 session["data"].update(parsed.entities)
                 
-                # Check what we still need
-                if "name" not in session["data"]:
+                # Check what we have and what we need
+                has_name = session["data"].get("name")
+                has_region = session["data"].get("region")
+                has_amount = session["data"].get("amount")
+                has_purpose = session["data"].get("donation_type")
+                
+                if has_name and has_region:
+                    # User already known - use smart routing
+                    if has_amount and has_purpose:
+                        # Everything extracted! Skip to currency
+                        session["step"] = "awaiting_currency"
+                        save_session(phone, session["step"], session["data"])
+                        whatsapp.send_message(
+                            f"Got it! *{has_purpose}* - *{has_amount}*",
+                            phone
+                        )
+                        enhanced_whatsapp.send_currency_selection(phone)
+                        return "currency_prompt"
+                    elif has_purpose:
+                        # Have purpose, need amount
+                        session["step"] = "awaiting_amount"
+                        save_session(phone, session["step"], session["data"])
+                        whatsapp.send_message(
+                            f"*{has_purpose}* - got it!\n\n"
+                            "How much would you like to donate?\n"
+                            "_Maximum: Both ZWG and USD is 480_",
+                            phone
+                        )
+                        return "amount_prompt"
+                    elif has_amount:
+                        # Have amount, need purpose
+                        session["step"] = "awaiting_purpose"
+                        save_session(phone, session["step"], session["data"])
+                        whatsapp.send_message(f"Amount: *{has_amount}* - got it!", phone)
+                        enhanced_whatsapp.send_donation_purposes(phone)
+                        return "purpose_prompt"
+                    else:
+                        # Need both
+                        session["step"] = "awaiting_purpose"
+                        save_session(phone, session["step"], session["data"])
+                        enhanced_whatsapp.send_donation_purposes(phone)
+                        return "purpose_prompt"
+                else:
+                    # Need name/congregation - go to collect_info
                     session["step"] = "collect_info"
                     save_session(phone, session["step"], session["data"])
+                    
+                    # Build acknowledgment of what we extracted
+                    ack_parts = []
+                    if has_amount:
+                        ack_parts.append(f"Amount: *{has_amount}*")
+                    if has_purpose:
+                        ack_parts.append(f"Purpose: *{has_purpose}*")
+                    
+                    ack_text = ", ".join(ack_parts) if ack_parts else ""
+                    
                     whatsapp.send_message(
-                        "I understand you'd like to donate! 💝\n\n"
-                        "Please tell me your *name* and *congregation*:\n"
-                        "_Example: John Moyo, Harare Central_",
+                        f"I understand you'd like to donate!\n"
+                        f"{ack_text}\n\n"
+                        f"Please tell me your *name* and *congregation*:\n"
+                        f"_Example: John Moyo, Harare Central_",
                         phone
                     )
                     return "collect_info_needed"
-                else:
-                    # Have name, need purpose
-                    session["step"] = "awaiting_purpose"
-                    save_session(phone, session["step"], session["data"])
-                    enhanced_whatsapp.send_donation_purposes(phone)
-                    return "purpose_prompt"
             
             # Didn't understand - show menu again
             enhanced_whatsapp.send_main_menu(phone, "I didn't quite catch that. Please select an option:")
