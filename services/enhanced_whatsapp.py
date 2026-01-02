@@ -67,12 +67,20 @@ class EnhancedWhatsApp:
         }
         return self._send_request(payload)
     
+    # Logo URL - host your logo and put the URL here
+    # Can also use WhatsApp Media ID format: {"id": "media_id"}
+    LOGO_URL = os.getenv(
+        "LATTERPAY_LOGO_URL", 
+        "https://latterpay-production.up.railway.app/static/latterlogo.png"
+    )
+    
     def send_interactive_buttons(
         self,
         to: str,
         body: str,
         buttons: List[Dict[str, str]],
         header: str = None,
+        header_image_url: str = None,
         footer: str = None
     ) -> Dict:
         """
@@ -82,7 +90,8 @@ class EnhancedWhatsApp:
             to: Recipient phone number
             body: Main message body
             buttons: List of dicts with 'id' and 'title' keys (max 3)
-            header: Optional header text
+            header: Optional header text (ignored if header_image_url is set)
+            header_image_url: Optional header image URL
             footer: Optional footer text
         """
         interactive = {
@@ -102,8 +111,15 @@ class EnhancedWhatsApp:
             }
         }
         
-        if header:
+        # Image header takes priority over text header
+        if header_image_url:
+            interactive["header"] = {
+                "type": "image",
+                "image": {"link": header_image_url}
+            }
+        elif header:
             interactive["header"] = {"type": "text", "text": header[:60]}  # Max 60 chars
+        
         if footer:
             interactive["footer"] = {"text": footer[:60]}
         
@@ -167,8 +183,8 @@ class EnhancedWhatsApp:
     # PRE-BUILT INTERACTIVE MESSAGES
     # ========================================================================
     
-    def send_main_menu(self, to: str, greeting: str) -> Dict:
-        """Send the main menu with action buttons."""
+    def send_main_menu(self, to: str, greeting: str, show_logo: bool = True) -> Dict:
+        """Send the main menu with action buttons and optional logo."""
         return self.send_interactive_buttons(
             to=to,
             body=greeting + "\n\nWhat would you like to do?",
@@ -177,7 +193,8 @@ class EnhancedWhatsApp:
                 {"id": "action_register", "title": "📝 Register"},
                 {"id": "action_help", "title": "❓ Help"}
             ],
-            header="🏥 LatterPay",
+            header_image_url=self.LOGO_URL if show_logo else None,
+            header=None if show_logo else "🏥 LatterPay",
             footer="Tap a button to continue"
         )
     
@@ -265,8 +282,8 @@ class EnhancedWhatsApp:
             header="📋 Confirm Payment"
         )
     
-    def send_quick_donate_offer(self, to: str, profile_summary: str) -> Dict:
-        """Offer quick donate option to returning users."""
+    def send_quick_donate_offer(self, to: str, profile_summary: str, show_logo: bool = True) -> Dict:
+        """Offer quick donate option to returning users with optional logo."""
         return self.send_interactive_buttons(
             to=to,
             body=profile_summary,
@@ -275,7 +292,8 @@ class EnhancedWhatsApp:
                 {"id": "quick_new", "title": "🏛️ Diff. Congregation"},
                 {"id": "quick_help", "title": "❓ Help"}
             ],
-            header="⚡ Welcome Back!"
+            header_image_url=self.LOGO_URL if show_logo else None,
+            header=None if show_logo else "⚡ Welcome Back!"
         )
     
     # ========================================================================

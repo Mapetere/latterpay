@@ -124,7 +124,10 @@ logger = logging.getLogger(__name__)
 # FLASK APPLICATION
 # ============================================================================
 
-latterpay = Flask(__name__)
+# Configure static folder for serving images (logo, etc.)
+STATIC_FOLDER = os.path.join(BASE_DIR, "images")
+
+latterpay = Flask(__name__, static_folder=STATIC_FOLDER, static_url_path="/static")
 
 # Security configuration
 latterpay.config.update(
