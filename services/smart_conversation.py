@@ -346,10 +346,11 @@ class SmartConversation:
             # Returning user
             name = profile.name.split()[0]  # First name only
             
-            # New Year greeting for first 20 days of January
-            new_year_greeting = ""
+            # For returning users: Happy New Year REPLACES the time greeting during Jan 1-20
             if is_new_year_period:
-                new_year_greeting = f"Happy New Year {name}!\n\n"
+                main_greeting = f"Happy New Year {name}!"
+            else:
+                main_greeting = f"{time_greeting} {name}!"
             
             if profile.donation_count > 0:
                 # Has donated before - show currency-specific totals
@@ -365,23 +366,19 @@ class SmartConversation:
                     totals_text = "*$0.00*"
                 
                 greeting = (
-                    f"{new_year_greeting}"
-                    f"{time_greeting} {name}!\n\n"
+                    f"{main_greeting}\n\n"
                     f"Welcome back to *LatterPay*!\n"
                     f"You've made *{profile.donation_count}* donation(s) totaling {totals_text}.\n\n"
                     f"Thank you for your continued support!"
                 )
             else:
                 greeting = (
-                    f"{new_year_greeting}"
-                    f"{time_greeting} {name}!\n\n"
+                    f"{main_greeting}\n\n"
                     f"Welcome back to *LatterPay*!"
                 )
         else:
-            # New user
-            new_year_text = "Happy New Year!\n\n" if is_new_year_period else ""
+            # New user - ALWAYS gets normal time-based greeting (no Happy New Year)
             greeting = (
-                f"{new_year_text}"
                 f"{time_greeting}!\n\n"
                 f"Welcome to *LatterPay* - your trusted donation platform.\n\n"
                 f"I'm here to help you make contributions quickly and securely."

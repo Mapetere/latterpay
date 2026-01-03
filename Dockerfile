@@ -34,8 +34,8 @@ FROM python:3.11-slim as production
 
 # Labels
 LABEL maintainer="Nyasha Mapetere <mapeterenyasha@gmail.com>" \
-      version="2.0.0" \
-      description="LatterPay WhatsApp Payment Service"
+    version="2.0.0" \
+    description="LatterPay WhatsApp Payment Service"
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -80,14 +80,14 @@ EXPOSE ${PORT}
 
 # Run with Gunicorn
 CMD ["gunicorn", "app:latterpay", \
-     "--bind", "0.0.0.0:8010", \
-     "--workers", "2", \
-     "--threads", "4", \
-     "--worker-class", "gthread", \
-     "--worker-tmp-dir", "/dev/shm", \
-     "--timeout", "120", \
-     "--keep-alive", "5", \
-     "--log-level", "info", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-", \
-     "--capture-output"]
+    "--bind", "0.0.0.0:8010", \
+    "--workers", "4", \
+    "--threads", "4", \
+    "--worker-class", "gthread", \
+    "--worker-tmp-dir", "/dev/shm", \
+    "--timeout", "120", \
+    "--keep-alive", "5", \
+    "--log-level", "info", \
+    "--access-logfile", "-", \
+    "--error-logfile", "-", \
+    "--capture-output"]
