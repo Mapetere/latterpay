@@ -366,7 +366,7 @@ class EnhancedWhatsApp:
         cities = province_cities.get(province, [{"id": "city_other", "title": "Other", "description": "Type your city"}])
         
         sections = [{
-            "title": "Select Your City/Congregation",
+            "title": "Select City",
             "rows": cities
         }]
         
