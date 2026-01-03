@@ -61,62 +61,128 @@ class UserProfile:
 
 
 class UserMemory:
-    """Manages persistent user profiles and preferences."""
+    """Manages persistent user profiles and preferences.
+    
+    Automatically uses PostgreSQL when DATABASE_URL is set,
+    falls back to SQLite otherwise.
+    """
     
     def __init__(self, db_path: str = "botdata.db"):
         self.db_path = db_path
+        self.use_postgres = False
+        self.pg_pool = None
         self._init_db()
     
     def _init_db(self):
-        """Initialize user profiles table."""
-        try:
-            conn = sqlite3.connect(self.db_path, timeout=10)
-            cursor = conn.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS user_profiles (
-                    phone TEXT PRIMARY KEY,
-                    name TEXT,
-                    congregation TEXT,
-                    email TEXT,
-                    preferred_currency TEXT DEFAULT 'ZWG',
-                    preferred_payment_method TEXT DEFAULT 'EcoCash',
-                    total_usd REAL DEFAULT 0,
-                    total_zwg REAL DEFAULT 0,
-                    donation_count INTEGER DEFAULT 0,
-                    last_donation_date TEXT,
-                    created_at TEXT,
-                    last_seen TEXT
-                )
-            """)
-            
-            # Migrate old schema if needed (add new columns if they don't exist)
+        """Initialize database connection and tables."""
+        import os
+        
+        DATABASE_URL = os.getenv("DATABASE_URL")
+        
+        if DATABASE_URL:
             try:
-                cursor.execute("ALTER TABLE user_profiles ADD COLUMN total_usd REAL DEFAULT 0")
-            except sqlite3.OperationalError:
-                pass  # Column already exists
+                import psycopg2
+                from psycopg2 import pool
+                
+                # Fix Railway URL format
+                db_url = DATABASE_URL
+                if db_url.startswith("postgres://"):
+                    db_url = db_url.replace("postgres://", "postgresql://", 1)
+                
+                self.pg_pool = psycopg2.pool.ThreadedConnectionPool(1, 5, db_url)
+                self.use_postgres = True
+                logger.info("UserMemory: Using PostgreSQL")
+                
+                # Ensure table exists
+                conn = self.pg_pool.getconn()
+                cursor = conn.cursor()
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS user_profiles (
+                        phone TEXT PRIMARY KEY,
+                        name TEXT,
+                        congregation TEXT,
+                        email TEXT,
+                        preferred_currency TEXT DEFAULT 'ZWG',
+                        preferred_payment_method TEXT DEFAULT 'EcoCash',
+                        total_usd REAL DEFAULT 0,
+                        total_zwg REAL DEFAULT 0,
+                        donation_count INTEGER DEFAULT 0,
+                        last_donation_date TEXT,
+                        created_at TEXT,
+                        last_seen TEXT
+                    )
+                """)
+                conn.commit()
+                self.pg_pool.putconn(conn)
+                
+            except Exception as e:
+                logger.warning(f"PostgreSQL init failed, using SQLite: {e}")
+                self.use_postgres = False
+        
+        if not self.use_postgres:
+            # SQLite fallback
+            logger.info("UserMemory: Using SQLite")
             try:
-                cursor.execute("ALTER TABLE user_profiles ADD COLUMN total_zwg REAL DEFAULT 0")
-            except sqlite3.OperationalError:
-                pass  # Column already exists
-            
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            logger.error(f"Failed to init user profiles table: {e}")
+                conn = sqlite3.connect(self.db_path, timeout=10)
+                cursor = conn.cursor()
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS user_profiles (
+                        phone TEXT PRIMARY KEY,
+                        name TEXT,
+                        congregation TEXT,
+                        email TEXT,
+                        preferred_currency TEXT DEFAULT 'ZWG',
+                        preferred_payment_method TEXT DEFAULT 'EcoCash',
+                        total_usd REAL DEFAULT 0,
+                        total_zwg REAL DEFAULT 0,
+                        donation_count INTEGER DEFAULT 0,
+                        last_donation_date TEXT,
+                        created_at TEXT,
+                        last_seen TEXT
+                    )
+                """)
+                
+                # Migrate old schema if needed
+                try:
+                    cursor.execute("ALTER TABLE user_profiles ADD COLUMN total_usd REAL DEFAULT 0")
+                except sqlite3.OperationalError:
+                    pass
+                try:
+                    cursor.execute("ALTER TABLE user_profiles ADD COLUMN total_zwg REAL DEFAULT 0")
+                except sqlite3.OperationalError:
+                    pass
+                
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                logger.error(f"Failed to init user profiles table: {e}")
     
     def get_profile(self, phone: str) -> Optional[UserProfile]:
         """Get user profile by phone number."""
         try:
-            conn = sqlite3.connect(self.db_path, timeout=10)
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM user_profiles WHERE phone = ?", (phone,))
-            row = cursor.fetchone()
-            conn.close()
-            
-            if row:
-                columns = [desc[0] for desc in cursor.description]
-                return UserProfile.from_dict(dict(zip(columns, row)))
-            return None
+            if self.use_postgres and self.pg_pool:
+                conn = self.pg_pool.getconn()
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT * FROM user_profiles WHERE phone = %s", (phone,))
+                    row = cursor.fetchone()
+                    if row:
+                        columns = [desc[0] for desc in cursor.description]
+                        return UserProfile.from_dict(dict(zip(columns, row)))
+                    return None
+                finally:
+                    self.pg_pool.putconn(conn)
+            else:
+                conn = sqlite3.connect(self.db_path, timeout=10)
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM user_profiles WHERE phone = ?", (phone,))
+                row = cursor.fetchone()
+                conn.close()
+                
+                if row:
+                    columns = [desc[0] for desc in cursor.description]
+                    return UserProfile.from_dict(dict(zip(columns, row)))
+                return None
         except Exception as e:
             logger.error(f"Failed to get profile for {phone}: {e}")
             return None
@@ -124,23 +190,55 @@ class UserMemory:
     def save_profile(self, profile: UserProfile):
         """Save or update user profile."""
         try:
-            conn = sqlite3.connect(self.db_path, timeout=10)
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT OR REPLACE INTO user_profiles 
-                (phone, name, congregation, email, preferred_currency, 
-                 preferred_payment_method, total_usd, total_zwg, donation_count,
-                 last_donation_date, created_at, last_seen)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                profile.phone, profile.name, profile.congregation, profile.email,
-                profile.preferred_currency, profile.preferred_payment_method,
-                profile.total_usd, profile.total_zwg, profile.donation_count,
-                profile.last_donation_date, profile.created_at,
-                datetime.now().isoformat()
-            ))
-            conn.commit()
-            conn.close()
+            if self.use_postgres and self.pg_pool:
+                conn = self.pg_pool.getconn()
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        INSERT INTO user_profiles 
+                        (phone, name, congregation, email, preferred_currency, 
+                         preferred_payment_method, total_usd, total_zwg, donation_count,
+                         last_donation_date, created_at, last_seen)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (phone) DO UPDATE SET
+                            name = EXCLUDED.name,
+                            congregation = EXCLUDED.congregation,
+                            email = EXCLUDED.email,
+                            preferred_currency = EXCLUDED.preferred_currency,
+                            preferred_payment_method = EXCLUDED.preferred_payment_method,
+                            total_usd = EXCLUDED.total_usd,
+                            total_zwg = EXCLUDED.total_zwg,
+                            donation_count = EXCLUDED.donation_count,
+                            last_donation_date = EXCLUDED.last_donation_date,
+                            last_seen = EXCLUDED.last_seen
+                    """, (
+                        profile.phone, profile.name, profile.congregation, profile.email,
+                        profile.preferred_currency, profile.preferred_payment_method,
+                        profile.total_usd, profile.total_zwg, profile.donation_count,
+                        profile.last_donation_date, profile.created_at,
+                        datetime.now().isoformat()
+                    ))
+                    conn.commit()
+                finally:
+                    self.pg_pool.putconn(conn)
+            else:
+                conn = sqlite3.connect(self.db_path, timeout=10)
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT OR REPLACE INTO user_profiles 
+                    (phone, name, congregation, email, preferred_currency, 
+                     preferred_payment_method, total_usd, total_zwg, donation_count,
+                     last_donation_date, created_at, last_seen)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    profile.phone, profile.name, profile.congregation, profile.email,
+                    profile.preferred_currency, profile.preferred_payment_method,
+                    profile.total_usd, profile.total_zwg, profile.donation_count,
+                    profile.last_donation_date, profile.created_at,
+                    datetime.now().isoformat()
+                ))
+                conn.commit()
+                conn.close()
             logger.debug(f"Saved profile for {profile.phone}")
         except Exception as e:
             logger.error(f"Failed to save profile: {e}")
