@@ -226,6 +226,7 @@ class StreamlinedFlow:
             "awaiting_action": self._handle_action_selection,
             "collect_info": self._handle_collect_info,
             "awaiting_name": self._handle_name_input,
+            "awaiting_province": self._handle_province_selection,
             "awaiting_congregation": self._handle_congregation_selection,
             "awaiting_purpose": self._handle_purpose_selection,
             "awaiting_amount": self._handle_amount_input,
@@ -474,41 +475,56 @@ class StreamlinedFlow:
         
         # Save name
         session["data"]["name"] = name.title()
-        session["step"] = "awaiting_congregation"
+        session["step"] = "awaiting_province"
         save_session(phone, session["step"], session["data"])
         
-        whatsapp.send_message(
-            f"Thanks, *{name.title()}*!\n\n"
-            "Now please select your congregation:",
-            phone
-        )
-        enhanced_whatsapp.send_congregation_list(phone)
-        return "congregation_prompt_sent"
+        # Send province list (the list includes the name confirmation)
+        enhanced_whatsapp.send_congregation_list(phone, name.title())
+        return "province_prompt_sent"
+    
+    def _handle_province_selection(self, phone: str, message: str, session: Dict) -> str:
+        """Handle province selection, then show cities for that province."""
+        msg = message.strip()
+        
+        # Check if it's a province button selection
+        if msg.startswith("province_"):
+            session["data"]["province"] = msg
+            session["step"] = "awaiting_congregation"
+            save_session(phone, session["step"], session["data"])
+            
+            # Send cities for this province
+            enhanced_whatsapp.send_cities_for_province(phone, msg)
+            return "city_prompt_sent"
+        else:
+            # User typed something - just continue
+            session["data"]["province"] = msg.title()
+            session["step"] = "awaiting_congregation"
+            save_session(phone, session["step"], session["data"])
+            enhanced_whatsapp.send_cities_for_province(phone, "province_harare")
+            return "city_prompt_sent"
     
     def _handle_congregation_selection(self, phone: str, message: str, session: Dict) -> str:
-        """Handle congregation selection from list."""
+        """Handle city/congregation selection from list."""
         msg = message.strip()
         
         # Check if it's a city button selection
         if msg in self.CITY_MAP:
             congregation = self.CITY_MAP[msg]
+        elif msg.startswith("city_"):
+            # Extract city name from ID
+            congregation = msg.replace("city_", "").replace("_", " ").title()
         else:
-            # User may have typed the city name - try to match
+            # User may have typed the city name
             congregation = msg.title()
         
         session["data"]["region"] = congregation
         
-        # Now proceed to purpose selection
+        # Now proceed to purpose selection - single message
         session["step"] = "awaiting_purpose"
         save_session(phone, session["step"], session["data"])
         
-        name = session["data"].get("name", "")
-        whatsapp.send_message(
-            f"*{congregation}* - got it!\n\n"
-            f"Now, *{name}*, what would you like to donate towards?",
-            phone
-        )
-        enhanced_whatsapp.send_donation_purposes(phone)
+        # Send purpose list with congregation confirmation
+        enhanced_whatsapp.send_donation_purposes(phone, congregation)
         return "purpose_prompt_sent"
     
     def _handle_collect_info(self, phone: str, message: str, session: Dict) -> str:

@@ -197,7 +197,7 @@ class EnhancedWhatsApp:
             footer="Tap a button to continue"
         )
     
-    def send_donation_purposes(self, to: str) -> Dict:
+    def send_donation_purposes(self, to: str, congregation: str = None) -> Dict:
         """Send donation purpose selection as a list."""
         sections = [{
             "title": "Donation Categories",
@@ -235,59 +235,138 @@ class EnhancedWhatsApp:
             ]
         }]
         
+        # Build body with congregation confirmation if provided
+        if congregation:
+            body = f"Congregation recorded: *{congregation}*\n\nNext step: Select donation purpose"
+        else:
+            body = "What would you like to contribute towards?\n\nSelect a purpose from the list below:"
+        
         return self.send_interactive_list(
             to=to,
-            body="What would you like to contribute towards?\n\nSelect a purpose from the list below:",
+            body=body,
             button_text="Choose Purpose",
             sections=sections,
             header="Donation Purpose"
         )
     
-    def send_congregation_list(self, to: str) -> Dict:
-        """Send congregation/city selection as a list."""
-        sections = [
-            {
-                "title": "Harare Region",
-                "rows": [
-                    {"id": "city_harare_central", "title": "Harare Central"},
-                    {"id": "city_harare_north", "title": "Harare North"},
-                    {"id": "city_harare_south", "title": "Harare South"},
-                    {"id": "city_chitungwiza", "title": "Chitungwiza"},
-                    {"id": "city_epworth", "title": "Epworth"},
-                    {"id": "city_norton", "title": "Norton"},
-                    {"id": "city_ruwa", "title": "Ruwa"},
-                ]
-            },
-            {
-                "title": "Bulawayo Region",
-                "rows": [
-                    {"id": "city_bulawayo_central", "title": "Bulawayo Central"},
-                    {"id": "city_bulawayo_north", "title": "Bulawayo North"},
-                    {"id": "city_bulawayo_south", "title": "Bulawayo South"},
-                ]
-            },
-            {
-                "title": "Other Cities",
-                "rows": [
-                    {"id": "city_mutare", "title": "Mutare"},
-                    {"id": "city_gweru", "title": "Gweru"},
-                    {"id": "city_kwekwe", "title": "Kwekwe"},
-                    {"id": "city_masvingo", "title": "Masvingo"},
-                    {"id": "city_chinhoyi", "title": "Chinhoyi"},
-                    {"id": "city_marondera", "title": "Marondera"},
-                    {"id": "city_kadoma", "title": "Kadoma"},
-                    {"id": "city_bindura", "title": "Bindura"},
-                    {"id": "city_victoria_falls", "title": "Victoria Falls"},
-                ]
-            }
-        ]
+    def send_congregation_list(self, to: str, name: str = None) -> Dict:
+        """Send province/region selection first."""
+        sections = [{
+            "title": "Select Your Province",
+            "rows": [
+                {"id": "province_harare", "title": "Harare Metropolitan"},
+                {"id": "province_bulawayo", "title": "Bulawayo Metropolitan"},
+                {"id": "province_mashonaland_east", "title": "Mashonaland East"},
+                {"id": "province_mashonaland_west", "title": "Mashonaland West"},
+                {"id": "province_mashonaland_central", "title": "Mashonaland Central"},
+                {"id": "province_midlands", "title": "Midlands"},
+                {"id": "province_masvingo", "title": "Masvingo"},
+                {"id": "province_manicaland", "title": "Manicaland"},
+                {"id": "province_matebeleland_north", "title": "Matabeleland North"},
+                {"id": "province_matebeleland_south", "title": "Matabeleland South"},
+            ]
+        }]
+        
+        if name:
+            body = f"Name recorded: *{name}*\n\nNext step: Select your province"
+        else:
+            body = "Please select your province:"
         
         return self.send_interactive_list(
             to=to,
-            body="Please select your congregation/city:",
+            body=body,
+            button_text="Choose Province",
+            sections=sections,
+            header="Select Province"
+        )
+    
+    def send_cities_for_province(self, to: str, province: str) -> Dict:
+        """Send cities list for the selected province."""
+        province_cities = {
+            "province_harare": [
+                {"id": "city_harare_central", "title": "Harare Central"},
+                {"id": "city_harare_north", "title": "Harare North"},
+                {"id": "city_harare_south", "title": "Harare South"},
+                {"id": "city_chitungwiza", "title": "Chitungwiza"},
+                {"id": "city_epworth", "title": "Epworth"},
+                {"id": "city_norton", "title": "Norton"},
+                {"id": "city_ruwa", "title": "Ruwa"},
+            ],
+            "province_bulawayo": [
+                {"id": "city_bulawayo_central", "title": "Bulawayo Central"},
+                {"id": "city_bulawayo_north", "title": "Bulawayo North"},
+                {"id": "city_bulawayo_south", "title": "Bulawayo South"},
+                {"id": "city_bulawayo_west", "title": "Bulawayo West"},
+            ],
+            "province_mashonaland_east": [
+                {"id": "city_marondera", "title": "Marondera"},
+                {"id": "city_ruwa", "title": "Ruwa"},
+                {"id": "city_mutoko", "title": "Mutoko"},
+                {"id": "city_mudzi", "title": "Mudzi"},
+                {"id": "city_uzumba", "title": "Uzumba"},
+            ],
+            "province_mashonaland_west": [
+                {"id": "city_chinhoyi", "title": "Chinhoyi"},
+                {"id": "city_kadoma", "title": "Kadoma"},
+                {"id": "city_chegutu", "title": "Chegutu"},
+                {"id": "city_karoi", "title": "Karoi"},
+                {"id": "city_norton", "title": "Norton"},
+            ],
+            "province_mashonaland_central": [
+                {"id": "city_bindura", "title": "Bindura"},
+                {"id": "city_mt_darwin", "title": "Mt Darwin"},
+                {"id": "city_shamva", "title": "Shamva"},
+                {"id": "city_mvurwi", "title": "Mvurwi"},
+                {"id": "city_centenary", "title": "Centenary"},
+            ],
+            "province_midlands": [
+                {"id": "city_gweru", "title": "Gweru"},
+                {"id": "city_kwekwe", "title": "Kwekwe"},
+                {"id": "city_zvishavane", "title": "Zvishavane"},
+                {"id": "city_shurugwi", "title": "Shurugwi"},
+                {"id": "city_gokwe", "title": "Gokwe"},
+                {"id": "city_redcliff", "title": "Redcliff"},
+            ],
+            "province_masvingo": [
+                {"id": "city_masvingo", "title": "Masvingo"},
+                {"id": "city_chiredzi", "title": "Chiredzi"},
+                {"id": "city_triangle", "title": "Triangle"},
+                {"id": "city_gutu", "title": "Gutu"},
+            ],
+            "province_manicaland": [
+                {"id": "city_mutare", "title": "Mutare"},
+                {"id": "city_chipinge", "title": "Chipinge"},
+                {"id": "city_rusape", "title": "Rusape"},
+                {"id": "city_nyanga", "title": "Nyanga"},
+                {"id": "city_chimanimani", "title": "Chimanimani"},
+            ],
+            "province_matebeleland_north": [
+                {"id": "city_victoria_falls", "title": "Victoria Falls"},
+                {"id": "city_hwange", "title": "Hwange"},
+                {"id": "city_lupane", "title": "Lupane"},
+                {"id": "city_binga", "title": "Binga"},
+            ],
+            "province_matebeleland_south": [
+                {"id": "city_gwanda", "title": "Gwanda"},
+                {"id": "city_beitbridge", "title": "Beitbridge"},
+                {"id": "city_plumtree", "title": "Plumtree"},
+                {"id": "city_filabusi", "title": "Filabusi"},
+            ],
+        }
+        
+        cities = province_cities.get(province, [{"id": "city_other", "title": "Other"}])
+        
+        sections = [{
+            "title": "Select Your City/Congregation",
+            "rows": cities
+        }]
+        
+        return self.send_interactive_list(
+            to=to,
+            body="Now select your city or congregation:",
             button_text="Choose City",
             sections=sections,
-            header="Select Congregation"
+            header="Select City"
         )
     
     def send_payment_methods(self, to: str) -> Dict:
