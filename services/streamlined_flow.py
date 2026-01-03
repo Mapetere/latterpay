@@ -488,22 +488,34 @@ class StreamlinedFlow:
         """Handle province selection, then show cities for that province."""
         msg = message.strip()
         
-        # Check if it's a province button selection
+        # Map province titles to IDs
+        province_map = {
+            "harare metropolitan": "province_harare",
+            "bulawayo metropolitan": "province_bulawayo",
+            "mashonaland east": "province_mashonaland_east",
+            "mashonaland west": "province_mashonaland_west",
+            "mashonaland central": "province_mashonaland_central",
+            "midlands": "province_midlands",
+            "masvingo": "province_masvingo",
+            "manicaland": "province_manicaland",
+            "matabeleland north": "province_matebeleland_north",
+            "matabeleland south": "province_matebeleland_south",
+        }
+        
+        # Check if it's a province button selection (ID)
         if msg.startswith("province_"):
-            session["data"]["province"] = msg
-            session["step"] = "awaiting_congregation"
-            save_session(phone, session["step"], session["data"])
-            
-            # Send cities for this province
-            enhanced_whatsapp.send_cities_for_province(phone, msg)
-            return "city_prompt_sent"
+            province_id = msg
         else:
-            # User typed something - just continue
-            session["data"]["province"] = msg.title()
-            session["step"] = "awaiting_congregation"
-            save_session(phone, session["step"], session["data"])
-            enhanced_whatsapp.send_cities_for_province(phone, "province_harare")
-            return "city_prompt_sent"
+            # User selected by title - map to ID
+            province_id = province_map.get(msg.lower(), "province_harare")
+        
+        session["data"]["province"] = province_id
+        session["step"] = "awaiting_congregation"
+        save_session(phone, session["step"], session["data"])
+        
+        # Send cities for this province
+        enhanced_whatsapp.send_cities_for_province(phone, province_id)
+        return "city_prompt_sent"
     
     def _handle_congregation_selection(self, phone: str, message: str, session: Dict) -> str:
         """Handle city/congregation selection from list."""
