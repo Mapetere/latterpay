@@ -755,16 +755,19 @@ class StreamlinedFlow:
         """Generate and send payment confirmation."""
         data = session["data"]
         currency = data.get("currency", "ZWG")
-        symbol = "$" if currency == "USD" else "ZWG "
+        amount = data.get('amount', 0)
+        
+        # Format as USD$20.00 or ZWG$20.00
+        amount_display = f"{currency}${amount:.2f}"
         
         summary = (
             f" *Payment Summary*\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"\n\n"
             f" *Name:* {data.get('name', 'N/A')}\n"
-            f"️ *Congregation:* {data.get('region', 'N/A')}\n"
+            f" *Congregation:* {data.get('region', 'N/A')}\n"
             f" *Purpose:* {data.get('donation_type', 'N/A')}\n"
-            f" *Amount:* {symbol}{data.get('amount', 0):.2f}\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n\n"
+            f" *Amount:* {amount_display}\n\n"
+            f"\n\n"
             f"Tap  to proceed to payment"
         )
         
