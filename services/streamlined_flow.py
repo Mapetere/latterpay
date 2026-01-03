@@ -30,6 +30,8 @@ from services.sessions import (
 )
 from services.config import donation_config, admin_config
 
+logger = logging.getLogger(__name__)
+
 # AI-powered NLU (uses OpenAI with regex fallback)
 try:
     from services.ai_nlu import smart_extract, to_session_entities, OPENAI_ENABLED
@@ -39,8 +41,6 @@ except ImportError:
     AI_NLU_AVAILABLE = False
     OPENAI_ENABLED = False
     logger.warning("AI NLU not available, using regex only")
-
-logger = logging.getLogger(__name__)
 
 
 # ============================================================================
