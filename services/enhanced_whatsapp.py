@@ -53,6 +53,15 @@ class EnhancedWhatsApp:
             logger.info(f"Message sent successfully: {result.get('messages', [{}])[0].get('id', 'unknown')}")
             return result
         except requests.exceptions.RequestException as e:
+            # Log full error response for debugging
+            error_body = ""
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_body = e.response.json()
+                    logger.error(f"WhatsApp API error details: {error_body}")
+                except:
+                    error_body = e.response.text
+                    logger.error(f"WhatsApp API error text: {error_body}")
             logger.error(f"WhatsApp API error: {e}")
             return {"error": str(e)}
     
