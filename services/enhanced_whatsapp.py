@@ -240,7 +240,54 @@ class EnhancedWhatsApp:
             body="What would you like to contribute towards?\n\nSelect a purpose from the list below:",
             button_text="Choose Purpose",
             sections=sections,
-            header=" Donation Purpose"
+            header="Donation Purpose"
+        )
+    
+    def send_congregation_list(self, to: str) -> Dict:
+        """Send congregation/city selection as a list."""
+        sections = [
+            {
+                "title": "Harare Region",
+                "rows": [
+                    {"id": "city_harare_central", "title": "Harare Central"},
+                    {"id": "city_harare_north", "title": "Harare North"},
+                    {"id": "city_harare_south", "title": "Harare South"},
+                    {"id": "city_chitungwiza", "title": "Chitungwiza"},
+                    {"id": "city_epworth", "title": "Epworth"},
+                    {"id": "city_norton", "title": "Norton"},
+                    {"id": "city_ruwa", "title": "Ruwa"},
+                ]
+            },
+            {
+                "title": "Bulawayo Region",
+                "rows": [
+                    {"id": "city_bulawayo_central", "title": "Bulawayo Central"},
+                    {"id": "city_bulawayo_north", "title": "Bulawayo North"},
+                    {"id": "city_bulawayo_south", "title": "Bulawayo South"},
+                ]
+            },
+            {
+                "title": "Other Cities",
+                "rows": [
+                    {"id": "city_mutare", "title": "Mutare"},
+                    {"id": "city_gweru", "title": "Gweru"},
+                    {"id": "city_kwekwe", "title": "Kwekwe"},
+                    {"id": "city_masvingo", "title": "Masvingo"},
+                    {"id": "city_chinhoyi", "title": "Chinhoyi"},
+                    {"id": "city_marondera", "title": "Marondera"},
+                    {"id": "city_kadoma", "title": "Kadoma"},
+                    {"id": "city_bindura", "title": "Bindura"},
+                    {"id": "city_victoria_falls", "title": "Victoria Falls"},
+                ]
+            }
+        ]
+        
+        return self.send_interactive_list(
+            to=to,
+            body="Please select your congregation/city:",
+            button_text="Choose City",
+            sections=sections,
+            header="Select Congregation"
         )
     
     def send_payment_methods(self, to: str) -> Dict:

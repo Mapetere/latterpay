@@ -104,6 +104,29 @@ class StreamlinedFlow:
         "2": "ZWG",
     }
     
+    # City/Congregation mapping from button IDs
+    CITY_MAP = {
+        "city_harare_central": "Harare Central",
+        "city_harare_north": "Harare North",
+        "city_harare_south": "Harare South",
+        "city_chitungwiza": "Chitungwiza",
+        "city_epworth": "Epworth",
+        "city_norton": "Norton",
+        "city_ruwa": "Ruwa",
+        "city_bulawayo_central": "Bulawayo Central",
+        "city_bulawayo_north": "Bulawayo North",
+        "city_bulawayo_south": "Bulawayo South",
+        "city_mutare": "Mutare",
+        "city_gweru": "Gweru",
+        "city_kwekwe": "Kwekwe",
+        "city_masvingo": "Masvingo",
+        "city_chinhoyi": "Chinhoyi",
+        "city_marondera": "Marondera",
+        "city_kadoma": "Kadoma",
+        "city_bindura": "Bindura",
+        "city_victoria_falls": "Victoria Falls",
+    }
+    
     # Zimbabwe cities/congregations for auto-detection
     ZIMBABWE_CITIES = [
         "harare", "bulawayo", "chitungwiza", "mutare", "gweru", "kwekwe",
@@ -202,6 +225,8 @@ class StreamlinedFlow:
             "start": self._handle_start,
             "awaiting_action": self._handle_action_selection,
             "collect_info": self._handle_collect_info,
+            "awaiting_name": self._handle_name_input,
+            "awaiting_congregation": self._handle_congregation_selection,
             "awaiting_purpose": self._handle_purpose_selection,
             "awaiting_amount": self._handle_amount_input,
             "confirm_split_amount": self._handle_split_amount_confirmation,
@@ -280,37 +305,41 @@ class StreamlinedFlow:
                 enhanced_whatsapp.send_donation_purposes(phone)
                 return "purpose_prompt_sent"
             else:
-                # Need to collect info first
-                session["step"] = "collect_info"
+                # Need to collect info first - ask for name
+                session["step"] = "awaiting_name"
                 save_session(phone, session["step"], session["data"])
                 whatsapp.send_message(
-                    "Let's get started! \n\n"
-                    "Please tell me your *full name* and *congregation* in one message.\n\n"
-                    "_Example: John Moyo, Harare Central_",
+                    "Let's get started!\n\n"
+                    "Please enter your *full name*:\n\n"
+                    "_Example: John Moyo_",
                     phone
                 )
-                return "collect_info_prompt"
+                return "name_prompt_sent"
         
         elif msg in ["quick_new", "new"]:
             # User wants to donate from a DIFFERENT congregation
-            session["step"] = "collect_info"
-            # Keep name but clear congregation
+            # Keep name but ask for new congregation
             saved_name = session.get("data", {}).get("name", "")
             session["data"] = {"name": saved_name} if saved_name else {}
-            save_session(phone, session["step"], session["data"])
             
             if saved_name:
+                # Has name, just need congregation
+                session["step"] = "awaiting_congregation"
+                save_session(phone, session["step"], session["data"])
                 whatsapp.send_message(
-                    f"No problem, *{saved_name}*! \n\n"
-                    "Which *congregation* are you donating from today?\n\n"
-                    "_Just type the congregation name_",
+                    f"No problem, *{saved_name}*!\n\n"
+                    "Please select your congregation:",
                     phone
                 )
+                enhanced_whatsapp.send_congregation_list(phone)
             else:
+                # Need both name and congregation
+                session["step"] = "awaiting_name"
+                save_session(phone, session["step"], session["data"])
                 whatsapp.send_message(
-                    "Let's start fresh! \n\n"
-                    "Please tell me your *full name* and *congregation* in one message.\n\n"
-                    "_Example: John Moyo, Harare Central_",
+                    "Let's start fresh!\n\n"
+                    "Please enter your *full name*:\n\n"
+                    "_Example: John Moyo_",
                     phone
                 )
             return "collect_info_prompt"
@@ -420,6 +449,67 @@ class StreamlinedFlow:
     # ========================================================================
     # DONATION FLOW
     # ========================================================================
+    
+    def _handle_name_input(self, phone: str, message: str, session: Dict) -> str:
+        """Handle name input from user."""
+        name = message.strip()
+        
+        # Basic validation - name should have at least 2 characters
+        if len(name) < 2:
+            whatsapp.send_message(
+                "Please enter a valid name (at least 2 characters).",
+                phone
+            )
+            return "invalid_name"
+        
+        # Skip common commands
+        if name.lower() in ['cancel', 'menu', 'help', 'donate']:
+            if name.lower() == 'cancel':
+                return self._handle_cancel(phone)
+            elif name.lower() == 'menu':
+                delete_session(phone)
+                return self._handle_start(phone, message, {"step": "start", "data": {}})
+            elif name.lower() == 'help':
+                return self._send_help(phone)
+        
+        # Save name
+        session["data"]["name"] = name.title()
+        session["step"] = "awaiting_congregation"
+        save_session(phone, session["step"], session["data"])
+        
+        whatsapp.send_message(
+            f"Thanks, *{name.title()}*!\n\n"
+            "Now please select your congregation:",
+            phone
+        )
+        enhanced_whatsapp.send_congregation_list(phone)
+        return "congregation_prompt_sent"
+    
+    def _handle_congregation_selection(self, phone: str, message: str, session: Dict) -> str:
+        """Handle congregation selection from list."""
+        msg = message.strip()
+        
+        # Check if it's a city button selection
+        if msg in self.CITY_MAP:
+            congregation = self.CITY_MAP[msg]
+        else:
+            # User may have typed the city name - try to match
+            congregation = msg.title()
+        
+        session["data"]["region"] = congregation
+        
+        # Now proceed to purpose selection
+        session["step"] = "awaiting_purpose"
+        save_session(phone, session["step"], session["data"])
+        
+        name = session["data"].get("name", "")
+        whatsapp.send_message(
+            f"*{congregation}* - got it!\n\n"
+            f"Now, *{name}*, what would you like to donate towards?",
+            phone
+        )
+        enhanced_whatsapp.send_donation_purposes(phone)
+        return "purpose_prompt_sent"
     
     def _handle_collect_info(self, phone: str, message: str, session: Dict) -> str:
         """Handle combined name + congregation collection with AI NLU support."""
