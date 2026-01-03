@@ -352,6 +352,150 @@ def metrics():
     return jsonify(request_tracker.get_metrics())
 
 
+@latterpay.route("/migrate-to-postgres")
+def migrate_to_postgres():
+    """
+    One-time migration endpoint: Copy SQLite data to PostgreSQL.
+    Call this once after setting up PostgreSQL.
+    """
+    import os
+    
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    if not DATABASE_URL:
+        return jsonify({
+            "status": "error",
+            "message": "DATABASE_URL not set. Add PostgreSQL first."
+        }), 400
+    
+    try:
+        import psycopg2
+        
+        # Fix Railway URL format
+        db_url = DATABASE_URL
+        if db_url.startswith("postgres://"):
+            db_url = db_url.replace("postgres://", "postgresql://", 1)
+        
+        # Connect to PostgreSQL
+        pg_conn = psycopg2.connect(db_url)
+        pg_cursor = pg_conn.cursor()
+        
+        # Create tables in PostgreSQL
+        pg_cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                phone TEXT PRIMARY KEY,
+                name TEXT,
+                congregation TEXT,
+                email TEXT,
+                preferred_currency TEXT DEFAULT 'ZWG',
+                preferred_payment_method TEXT DEFAULT 'EcoCash',
+                total_usd REAL DEFAULT 0,
+                total_zwg REAL DEFAULT 0,
+                donation_count INTEGER DEFAULT 0,
+                last_donation_date TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            )
+        """)
+        
+        pg_cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                phone TEXT PRIMARY KEY,
+                step TEXT,
+                data TEXT,
+                last_active TIMESTAMP,
+                warned INTEGER DEFAULT 0
+            )
+        """)
+        
+        pg_cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sent_messages (
+                msg_id TEXT PRIMARY KEY,
+                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        pg_conn.commit()
+        
+        # Connect to SQLite
+        sqlite_conn = sqlite3.connect("botdata.db", timeout=10)
+        sqlite_conn.row_factory = sqlite3.Row
+        sqlite_cursor = sqlite_conn.cursor()
+        
+        migrated = {"user_profiles": 0, "sessions": 0}
+        
+        # Migrate user_profiles
+        try:
+            sqlite_cursor.execute("SELECT * FROM user_profiles")
+            for row in sqlite_cursor.fetchall():
+                try:
+                    pg_cursor.execute("""
+                        INSERT INTO user_profiles 
+                        (phone, name, congregation, email, preferred_currency, 
+                         preferred_payment_method, total_usd, total_zwg, donation_count,
+                         last_donation_date, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (phone) DO UPDATE SET
+                            name = EXCLUDED.name,
+                            congregation = EXCLUDED.congregation,
+                            total_usd = EXCLUDED.total_usd,
+                            total_zwg = EXCLUDED.total_zwg,
+                            donation_count = EXCLUDED.donation_count
+                    """, (
+                        row['phone'], row['name'], row['congregation'], 
+                        row.get('email'), row.get('preferred_currency', 'ZWG'),
+                        row.get('preferred_payment_method', 'EcoCash'),
+                        row.get('total_usd', 0), row.get('total_zwg', 0),
+                        row.get('donation_count', 0), row.get('last_donation_date'),
+                        row.get('created_at'), row.get('updated_at')
+                    ))
+                    migrated["user_profiles"] += 1
+                except Exception as e:
+                    logger.warning(f"Failed to migrate profile: {e}")
+        except Exception as e:
+            logger.warning(f"No user_profiles table or error: {e}")
+        
+        # Migrate sessions
+        try:
+            sqlite_cursor.execute("SELECT * FROM sessions")
+            for row in sqlite_cursor.fetchall():
+                try:
+                    pg_cursor.execute("""
+                        INSERT INTO sessions (phone, step, data, last_active, warned)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (phone) DO NOTHING
+                    """, (row['phone'], row['step'], row['data'], 
+                          row['last_active'], row.get('warned', 0)))
+                    migrated["sessions"] += 1
+                except:
+                    pass
+        except Exception as e:
+            logger.warning(f"No sessions table or error: {e}")
+        
+        pg_conn.commit()
+        pg_conn.close()
+        sqlite_conn.close()
+        
+        logger.info(f"Migration completed: {migrated}")
+        
+        return jsonify({
+            "status": "success",
+            "message": "Migration completed!",
+            "migrated": migrated
+        })
+        
+    except ImportError:
+        return jsonify({
+            "status": "error", 
+            "message": "psycopg2 not installed. Redeploy needed."
+        }), 500
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+
 @latterpay.route("/payment-return")
 def payment_return():
     """Payment return page after Paynow redirect."""
