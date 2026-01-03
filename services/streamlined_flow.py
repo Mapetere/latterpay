@@ -470,12 +470,23 @@ class StreamlinedFlow:
     
     def _handle_name_input(self, phone: str, message: str, session: Dict) -> str:
         """Handle name input from user."""
+        import re
         name = message.strip()
         
         # Basic validation - name should have at least 2 characters
         if len(name) < 2:
             whatsapp.send_message(
                 "Please enter a valid name (at least 2 characters).",
+                phone
+            )
+            return "invalid_name"
+        
+        # Reject special characters - only allow letters, spaces, hyphens, apostrophes
+        if not re.match(r"^[A-Za-z\s\-']+$", name):
+            whatsapp.send_message(
+                "Name contains invalid characters.\n\n"
+                "Please use only letters, spaces, and hyphens.\n"
+                "_Example: John Moyo_",
                 phone
             )
             return "invalid_name"
@@ -775,10 +786,9 @@ class StreamlinedFlow:
             save_session(phone, session["step"], session["data"])
             
             whatsapp.send_message(
-                f"*{purpose}* selected \n\n"
-                f" How much would you like to donate?\n\n"
-                f"Just type the amount (e.g., *50* or *100*)\n"
-                f"_Maximum: Both ZWG and USD is 480_",
+                f"*{purpose}* selected\n\n"
+                f"Enter your donation amount:\n"
+                f"_Example: 50 or 100 (max 480)_",
                 phone
             )
             return "amount_prompt_sent"
