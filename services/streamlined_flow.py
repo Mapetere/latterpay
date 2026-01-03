@@ -104,10 +104,60 @@ class StreamlinedFlow:
         "2": "ZWG",
     }
     
+    # Zimbabwe cities/congregations for auto-detection
+    ZIMBABWE_CITIES = [
+        "harare", "bulawayo", "chitungwiza", "mutare", "gweru", "kwekwe",
+        "kadoma", "masvingo", "chinhoyi", "marondera", "norton", "ruwa",
+        "chegutu", "bindura", "beitbridge", "hwange", "victoria falls",
+        "kariba", "zvishavane", "redcliff", "chiredzi", "chipinge", "rusape",
+        "nyanga", "shurugwi", "gokwe", "karoi", "banket", "mhangura",
+        "mvurwi", "shamva", "mt darwin", "centenary", "guruve", "muzarabani",
+        "glendale", "epworth", "highfield", "mbare", "avondale", "borrowdale",
+        "glen lorne", "marlborough", "waterfalls", "kuwadzana", "budiriro",
+        "dzivarasekwa", "mufakose", "glen norah", "southerton", "graniteside",
+        "belvedere", "arcadia", "greendale", "hatfield", "hillside", "mabelreign",
+        "mt pleasant", "vainona", "bluffhill", "ashdown park", "westgate",
+        # Common congregation/area names
+        "central", "north", "south", "east", "west", "cbd", "town", "township"
+    ]
+    
     def __init__(self):
         self.conversation = smart_conversation
         self.memory = user_memory
         self.nlu = nlu_engine
+    
+    def _detect_city(self, text: str) -> Optional[str]:
+        """Detect Zimbabwe city/congregation name from text."""
+        text_lower = text.lower()
+        for city in self.ZIMBABWE_CITIES:
+            if city in text_lower:
+                return city.title()
+        return None
+    
+    def _detect_name(self, text: str) -> Optional[str]:
+        """Try to detect a person's name from natural text."""
+        import re
+        text_lower = text.lower()
+        
+        # Patterns like "I'm X", "Im X", "My name is X", "I am X"
+        patterns = [
+            r"i[']?m\s+([a-z]+(?:\s+[a-z]+)?)",  # I'm John or Im John Moyo
+            r"my\s+name\s+is\s+([a-z]+(?:\s+[a-z]+)?)",  # My name is John
+            r"i\s+am\s+([a-z]+(?:\s+[a-z]+)?)",  # I am John
+            r"^([a-z]+(?:\s+[a-z]+)?)\s*,",  # John Moyo, Harare
+            r"^([a-z]+(?:\s+[a-z]+)?)\s+from",  # John Moyo from Harare
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text_lower)
+            if match:
+                name = match.group(1).strip()
+                # Filter out common non-name words
+                skip_words = ['donate', 'donating', 'pay', 'paying', 'want', 'would', 'like', 'to', 'for']
+                if name.split()[0] not in skip_words:
+                    return name.title()
+        
+        return None
     
     def handle_message(self, phone: str, message: str, raw_data: Dict = None) -> str:
         """
@@ -196,14 +246,15 @@ class StreamlinedFlow:
             session["is_returning"] = True
             save_session(phone, session["step"], session["data"])
             
-            enhanced_whatsapp.send_quick_donate_offer(phone, summary)
+            # Returning users - no logo
+            enhanced_whatsapp.send_quick_donate_offer(phone, summary, show_logo=False)
         else:
-            # New user - send main menu
+            # New user - send main menu with logo
             session["step"] = "awaiting_action"
             session["is_returning"] = False
             save_session(phone, session["step"], session["data"])
             
-            enhanced_whatsapp.send_main_menu(phone, greeting)
+            enhanced_whatsapp.send_main_menu(phone, greeting, show_logo=True)
         
         return "greeting_sent"
     
@@ -379,6 +430,18 @@ class StreamlinedFlow:
         else:
             parsed = self.nlu.parse(message)
             entities = parsed.entities
+        
+        # Auto-detect city/congregation from message
+        detected_city = self._detect_city(message)
+        if detected_city:
+            session["data"]["region"] = detected_city
+            logger.info(f"Auto-detected city: {detected_city}")
+        
+        # Auto-detect name from patterns like "Im X", "I'm X"
+        detected_name = self._detect_name(message)
+        if detected_name and "name" not in session.get("data", {}):
+            session["data"]["name"] = detected_name
+            logger.info(f"Auto-detected name: {detected_name}")
         
         # Check if they gave us an amount or purpose instead of name/congregation
         if entities.get("amount") or entities.get("donation_type"):
