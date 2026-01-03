@@ -478,7 +478,7 @@ class SmartConversation:
             # New user - ALWAYS gets normal time-based greeting (no Happy New Year)
             greeting = (
                 f"{time_greeting}!\n\n"
-                f"Welcome to *LatterPay* - your trusted donation platform.\n\n"
+                f"Welcome to *LatterPay* - your trusted platform for donations and data collection.\n\n"
                 f"I'm here to help you make contributions quickly and securely."
             )
         
