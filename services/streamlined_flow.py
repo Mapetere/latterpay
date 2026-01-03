@@ -214,6 +214,8 @@ class StreamlinedFlow:
             return self._handle_cancel(phone)
         if msg_lower in ["help", "?", "action_help", "quick_help"]:
             return self._send_help(phone)
+        if msg_lower in ["check", "status"]:
+            return self._handle_check_status(phone, session)
         if msg_lower == "menu":
             # Reset session and show smart menu
             delete_session(phone)
@@ -1084,10 +1086,11 @@ class StreamlinedFlow:
         """Send help message."""
         whatsapp.send_message(
             " *LatterPay Help*\n"
-            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "\n\n"
             "*Quick Commands:*\n"
             "• *menu* - Show main menu\n"
             "• *donate* - Start a donation\n"
+            "• *check* - Check payment status\n"
             "• *register* - Register as volunteer\n"
             "• *cancel* - Cancel current action\n"
             "• *help* - Show this help\n\n"
@@ -1096,11 +1099,62 @@ class StreamlinedFlow:
             "_\"donate 50 for conference\"_\n"
             "_\"100 monthly contribution\"_\n\n"
             "*Need Support?*\n"
-            "Contact: nyashamapetere@gmailcom\n\n"
-            "━━━━━━━━━━━━━━━━━━━━",
+            "Contact: nyashamapetere@gmail.com\n\n",
             phone
         )
         return "help_sent"
+    
+    def _handle_check_status(self, phone: str, session: Dict) -> str:
+        """Handle payment status check."""
+        # Check if there's a pending payment in session
+        data = session.get("data", {})
+        
+        if data.get("poll_url"):
+            # There's a pending payment - check its status
+            try:
+                from services.paynow_integration import check_payment_status
+                status = check_payment_status(data.get("poll_url"))
+                
+                if status and status.get("status") == "Paid":
+                    whatsapp.send_message(
+                        "Payment confirmed!\n\n"
+                        f"Amount: {data.get('currency', 'ZWG')}${data.get('amount', 0):.2f}\n"
+                        f"Purpose: {data.get('donation_type', 'Donation')}\n\n"
+                        "Thank you for your contribution!",
+                        phone
+                    )
+                    delete_session(phone)
+                    return "payment_confirmed"
+                elif status and status.get("status") in ["Sent", "Pending"]:
+                    whatsapp.send_message(
+                        "Payment is still pending.\n\n"
+                        "Please complete the payment on your phone, then type *check* again.",
+                        phone
+                    )
+                    return "payment_pending"
+                else:
+                    whatsapp.send_message(
+                        f"Payment status: {status.get('status', 'Unknown')}\n\n"
+                        "Please try again or type *menu* to start over.",
+                        phone
+                    )
+                    return "payment_status_unknown"
+            except Exception as e:
+                logger.error(f"Failed to check payment status: {e}")
+                whatsapp.send_message(
+                    "Could not check payment status.\n"
+                    "Please try again in a moment.",
+                    phone
+                )
+                return "status_check_failed"
+        else:
+            # No pending payment
+            whatsapp.send_message(
+                "No pending payments found.\n\n"
+                "Type *menu* to start a new donation.",
+                phone
+            )
+            return "no_pending_payment"
     
     def _handle_unknown(self, phone: str, message: str, session: Dict) -> str:
         """Handle unknown state."""

@@ -254,6 +254,38 @@ class UserMemory:
             profile.donation_count += 1
             profile.last_donation_date = datetime.now().isoformat()
             self.save_profile(profile)
+    
+    def save_user_from_session(self, phone: str, session_data: dict):
+        """Save or update user profile from session data."""
+        try:
+            # Get existing profile or create new one
+            profile = self.get_profile(phone)
+            
+            if profile:
+                # Update existing profile
+                if session_data.get("name"):
+                    profile.name = session_data["name"]
+                if session_data.get("region"):
+                    profile.congregation = session_data["region"]
+                if session_data.get("currency"):
+                    profile.preferred_currency = session_data["currency"]
+                if session_data.get("payment_method"):
+                    profile.preferred_payment_method = session_data["payment_method"]
+            else:
+                # Create new profile
+                profile = UserProfile(
+                    phone=phone,
+                    name=session_data.get("name", ""),
+                    congregation=session_data.get("region", ""),
+                    preferred_currency=session_data.get("currency", "ZWG"),
+                    preferred_payment_method=session_data.get("payment_method", "EcoCash"),
+                    created_at=datetime.now().isoformat()
+                )
+            
+            self.save_profile(profile)
+            logger.info(f"Saved user profile for {phone}: {profile.name}, {profile.congregation}")
+        except Exception as e:
+            logger.error(f"Failed to save user from session: {e}")
 
 
 # ============================================================================
@@ -507,6 +539,10 @@ class SmartConversation:
                 f"4️⃣ Get Help\n\n"
                 f"_Reply with a number or just tell me what you need!_"
             )
+    
+    def save_user_from_session(self, phone: str, session_data: dict):
+        """Save user profile from session data - wrapper for memory method."""
+        self.memory.save_user_from_session(phone, session_data)
     
     def process_natural_input(self, phone: str, text: str, session: Dict) -> Dict:
         """
