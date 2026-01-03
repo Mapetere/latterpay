@@ -257,9 +257,12 @@ class UserMemory:
     
     def save_user_from_session(self, phone: str, session_data: dict):
         """Save or update user profile from session data."""
+        logger.info(f"save_user_from_session called for {phone} with data: {session_data}")
+        
         try:
             # Get existing profile or create new one
             profile = self.get_profile(phone)
+            logger.info(f"Existing profile for {phone}: {profile}")
             
             if profile:
                 # Update existing profile
@@ -271,6 +274,7 @@ class UserMemory:
                     profile.preferred_currency = session_data["currency"]
                 if session_data.get("payment_method"):
                     profile.preferred_payment_method = session_data["payment_method"]
+                logger.info(f"Updated profile: {profile}")
             else:
                 # Create new profile
                 profile = UserProfile(
@@ -281,11 +285,12 @@ class UserMemory:
                     preferred_payment_method=session_data.get("payment_method", "EcoCash"),
                     created_at=datetime.now().isoformat()
                 )
+                logger.info(f"Created new profile: {profile}")
             
             self.save_profile(profile)
-            logger.info(f"Saved user profile for {phone}: {profile.name}, {profile.congregation}")
+            logger.info(f"Successfully saved profile for {phone}: name={profile.name}, congregation={profile.congregation}")
         except Exception as e:
-            logger.error(f"Failed to save user from session: {e}")
+            logger.error(f"Failed to save user from session: {e}", exc_info=True)
 
 
 # ============================================================================
