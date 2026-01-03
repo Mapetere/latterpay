@@ -521,14 +521,37 @@ class StreamlinedFlow:
         """Handle city/congregation selection from list."""
         msg = message.strip()
         
+        # Province name to readable format map
+        province_names = {
+            "province_harare": "Harare",
+            "province_bulawayo": "Bulawayo", 
+            "province_mashonaland_east": "Mashonaland East",
+            "province_mashonaland_west": "Mashonaland West",
+            "province_mashonaland_central": "Mashonaland Central",
+            "province_midlands": "Midlands",
+            "province_masvingo": "Masvingo",
+            "province_manicaland": "Manicaland",
+            "province_matebeleland_north": "Matabeleland North",
+            "province_matebeleland_south": "Matabeleland South",
+        }
+        
+        # If user selected a province name again (city list might have failed), 
+        # just use the province as congregation
+        if msg.lower() in ["midlands", "harare metropolitan", "bulawayo metropolitan", 
+                           "mashonaland east", "mashonaland west", "mashonaland central",
+                           "masvingo", "manicaland", "matabeleland north", "matabeleland south"]:
+            congregation = msg.title()
         # Check if it's a city button selection
-        if msg in self.CITY_MAP:
+        elif msg in self.CITY_MAP:
             congregation = self.CITY_MAP[msg]
         elif msg.startswith("city_"):
             # Extract city name from ID
             congregation = msg.replace("city_", "").replace("_", " ").title()
+        elif msg.startswith("province_"):
+            # Province ID was passed - convert to readable name
+            congregation = province_names.get(msg, msg.replace("province_", "").replace("_", " ").title())
         else:
-            # User may have typed the city name
+            # User typed the city/congregation name
             congregation = msg.title()
         
         session["data"]["region"] = congregation
