@@ -179,7 +179,7 @@ class StreamlinedFlow:
             # Returning user with saved info - offer quick donate
             summary = (
                 f"{greeting}\n\n"
-                f"💡 *Your saved details:*\n"
+                f" *Your saved details:*\n"
                 f"• Name: {profile.name}\n"
                 f"• Congregation: {profile.congregation}\n"
                 f"• Preferred: {profile.preferred_payment_method} ({profile.preferred_currency})"
@@ -223,7 +223,7 @@ class StreamlinedFlow:
                 
                 name = session["data"].get("name", "")
                 whatsapp.send_message(
-                    f"Great, *{name}*! Let's continue with your saved details. ✅",
+                    f"Great, *{name}*! Let's continue with your saved details. ",
                     phone
                 )
                 enhanced_whatsapp.send_donation_purposes(phone)
@@ -233,7 +233,7 @@ class StreamlinedFlow:
                 session["step"] = "collect_info"
                 save_session(phone, session["step"], session["data"])
                 whatsapp.send_message(
-                    "Let's get started! 📝\n\n"
+                    "Let's get started! \n\n"
                     "Please tell me your *full name* and *congregation* in one message.\n\n"
                     "_Example: John Moyo, Harare Central_",
                     phone
@@ -250,14 +250,14 @@ class StreamlinedFlow:
             
             if saved_name:
                 whatsapp.send_message(
-                    f"No problem, *{saved_name}*! 📝\n\n"
+                    f"No problem, *{saved_name}*! \n\n"
                     "Which *congregation* are you donating from today?\n\n"
                     "_Just type the congregation name_",
                     phone
                 )
             else:
                 whatsapp.send_message(
-                    "Let's start fresh! 📝\n\n"
+                    "Let's start fresh! \n\n"
                     "Please tell me your *full name* and *congregation* in one message.\n\n"
                     "_Example: John Moyo, Harare Central_",
                     phone
@@ -268,7 +268,7 @@ class StreamlinedFlow:
             session["step"] = "reg_awaiting_info"
             save_session(phone, session["step"], session["data"])
             whatsapp.send_message(
-                "📝 *Registration*\n\n"
+                " *Registration*\n\n"
                 "Please provide the following in one message:\n"
                 "• Your full name\n"
                 "• Your congregation/area\n"
@@ -439,7 +439,7 @@ class StreamlinedFlow:
             session["data"]["region"] = self._normalize_congregation(parts[0])
             
             whatsapp.send_message(
-                f"Got it! Donating from *{session['data']['region']}* today. ✅",
+                f"Got it! Donating from *{session['data']['region']}* today. ",
                 phone
             )
             
@@ -451,7 +451,7 @@ class StreamlinedFlow:
             session["data"]["region"] = self._normalize_congregation(parts[1])
             
             whatsapp.send_message(
-                f"Thanks, *{session['data']['name']}* from *{session['data']['region']}*! ✅",
+                f"Thanks, *{session['data']['name']}* from *{session['data']['region']}*! ",
                 phone
             )
             
@@ -510,8 +510,8 @@ class StreamlinedFlow:
             session["step"] = "awaiting_amount"
             save_session(phone, session["step"], session["data"])
             whatsapp.send_message(
-                f"*{has_purpose}* - got it! ✅\n\n"
-                "💰 How much would you like to donate?\n\n"
+                f"*{has_purpose}* - got it! \n\n"
+                " How much would you like to donate?\n\n"
                 "Just type the amount (e.g., *50* or *100*)\n"
                 "_Maximum: Both ZWG and USD is 480_",
                 phone
@@ -523,7 +523,7 @@ class StreamlinedFlow:
             session["step"] = "awaiting_purpose"
             save_session(phone, session["step"], session["data"])
             whatsapp.send_message(
-                f"Amount: *{has_amount}* - got it! ✅",
+                f"Amount: *{has_amount}* - got it! ",
                 phone
             )
             enhanced_whatsapp.send_donation_purposes(phone)
@@ -554,8 +554,8 @@ class StreamlinedFlow:
             save_session(phone, session["step"], session["data"])
             
             whatsapp.send_message(
-                f"*{purpose}* selected ✅\n\n"
-                f"💰 How much would you like to donate?\n\n"
+                f"*{purpose}* selected \n\n"
+                f" How much would you like to donate?\n\n"
                 f"Just type the amount (e.g., *50* or *100*)\n"
                 f"_Maximum: Both ZWG and USD is 480_",
                 phone
@@ -578,7 +578,7 @@ class StreamlinedFlow:
                 amount = float(message.strip().replace(",", "."))
             except ValueError:
                 whatsapp.send_message(
-                    "❌ Please enter a valid amount (just the number):\n"
+                    " Please enter a valid amount (just the number):\n"
                     "_Example: 50 or 100.00_",
                     phone
                 )
@@ -587,7 +587,7 @@ class StreamlinedFlow:
         # Validate amount
         if amount <= 0:
             whatsapp.send_message(
-                "❌ Amount must be greater than zero.\n"
+                " Amount must be greater than zero.\n"
                 "Please enter a valid amount:",
                 phone
             )
@@ -615,7 +615,7 @@ class StreamlinedFlow:
             breakdown_text = "\n".join(transactions_breakdown)
             
             whatsapp.send_message(
-                f"💡 *Large Donation Detected!*\n\n"
+                f" *Large Donation Detected!*\n\n"
                 f"Your total: *{amount:.2f}*\n"
                 f"Maximum per transaction: *{MAX_PER_TRANSACTION}*\n\n"
                 f"You'll need *{num_transactions} transactions*:\n"
@@ -695,14 +695,14 @@ class StreamlinedFlow:
         symbol = "$" if currency == "USD" else "ZWG "
         
         summary = (
-            f"📋 *Payment Summary*\n"
+            f" *Payment Summary*\n"
             f"━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"👤 *Name:* {data.get('name', 'N/A')}\n"
-            f"🏛️ *Congregation:* {data.get('region', 'N/A')}\n"
-            f"🎯 *Purpose:* {data.get('donation_type', 'N/A')}\n"
-            f"💰 *Amount:* {symbol}{data.get('amount', 0):.2f}\n\n"
+            f" *Name:* {data.get('name', 'N/A')}\n"
+            f"️ *Congregation:* {data.get('region', 'N/A')}\n"
+            f" *Purpose:* {data.get('donation_type', 'N/A')}\n"
+            f" *Amount:* {symbol}{data.get('amount', 0):.2f}\n\n"
             f"━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"Tap ✅ to proceed to payment"
+            f"Tap  to proceed to payment"
         )
         
         session["step"] = "awaiting_confirmation"
@@ -728,7 +728,7 @@ class StreamlinedFlow:
             session["data"] = {}
             save_session(phone, session["step"], session["data"])
             whatsapp.send_message(
-                "Let's update your details. 📝\n\n"
+                "Let's update your details. \n\n"
                 "Please provide your *name* and *congregation*:\n"
                 "_Example: John Moyo, Harare Central_",
                 phone
@@ -752,8 +752,8 @@ class StreamlinedFlow:
             save_session(phone, session["step"], session["data"])
             
             whatsapp.send_message(
-                f"*{method}* selected ✅\n\n"
-                f"📱 Please enter your *{method} number*:\n\n"
+                f"*{method}* selected \n\n"
+                f" Please enter your *{method} number*:\n\n"
                 f"_Format: 0771234567 or 263771234567_",
                 phone
             )
@@ -775,7 +775,7 @@ class StreamlinedFlow:
             formatted = raw
         else:
             whatsapp.send_message(
-                "❌ Invalid number format.\n"
+                " Invalid number format.\n"
                 "Use *0771234567* or *263771234567*:",
                 phone
             )
@@ -803,7 +803,7 @@ class StreamlinedFlow:
         except Exception as e:
             logger.error(f"Payment initiation error: {e}")
             whatsapp.send_message(
-                "❌ There was an error initiating your payment.\n"
+                " There was an error initiating your payment.\n"
                 "Please try again or contact support.",
                 phone
             )
@@ -857,13 +857,13 @@ class StreamlinedFlow:
             delete_session(phone)
             
             whatsapp.send_message(
-                f"🎉 *Registration Complete!*\n\n"
+                f" *Registration Complete!*\n\n"
                 f"Welcome, *{session['data']['name']}*!\n\n"
-                f"📋 *Your Details:*\n"
+                f" *Your Details:*\n"
                 f"• Congregation: {session['data']['region']}\n"
                 f"• Email: {session['data']['email']}\n"
                 f"• Skill: {session['data']['skill']}\n\n"
-                f"Thank you for volunteering! We'll be in touch. 🙏\n\n"
+                f"Thank you for volunteering! We'll be in touch. \n\n"
                 f"_Type *menu* to donate or get help._",
                 phone
             )
@@ -901,9 +901,9 @@ class StreamlinedFlow:
         """Handle cancellation."""
         delete_session(phone)
         whatsapp.send_message(
-            "❌ *Cancelled*\n\n"
+            " *Cancelled*\n\n"
             "No worries! Type *menu* whenever you're ready to start again.\n\n"
-            "Have a blessed day! 🙏",
+            "Have a blessed day! ",
             phone
         )
         return "cancelled"
@@ -911,7 +911,7 @@ class StreamlinedFlow:
     def _send_help(self, phone: str) -> str:
         """Send help message."""
         whatsapp.send_message(
-            "❓ *LatterPay Help*\n"
+            " *LatterPay Help*\n"
             "━━━━━━━━━━━━━━━━━━━━\n\n"
             "*Quick Commands:*\n"
             "• *menu* - Show main menu\n"

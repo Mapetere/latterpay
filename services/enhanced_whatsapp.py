@@ -188,12 +188,12 @@ class EnhancedWhatsApp:
             to=to,
             body=greeting + "\n\nWhat would you like to do?",
             buttons=[
-                {"id": "action_donate", "title": "💰 Donate"},
-                {"id": "action_register", "title": "📝 Register"},
-                {"id": "action_help", "title": "❓ Help"}
+                {"id": "action_donate", "title": "Donate"},
+                {"id": "action_register", "title": "Register"},
+                {"id": "action_help", "title": "Help"}
             ],
             header_image_url=self.LOGO_URL if show_logo else None,
-            header=None if show_logo else "🏥 LatterPay",
+            header=None if show_logo else "LatterPay",
             footer="Tap a button to continue"
         )
     
@@ -240,7 +240,7 @@ class EnhancedWhatsApp:
             body="What would you like to contribute towards?\n\nSelect a purpose from the list below:",
             button_text="Choose Purpose",
             sections=sections,
-            header="🎯 Donation Purpose"
+            header=" Donation Purpose"
         )
     
     def send_payment_methods(self, to: str) -> Dict:
@@ -249,11 +249,11 @@ class EnhancedWhatsApp:
             to=to,
             body="Select your preferred payment method:",
             buttons=[
-                {"id": "pay_ecocash", "title": "📱 EcoCash"},
-                {"id": "pay_onemoney", "title": "📱 OneMoney"},
-                {"id": "pay_innbucks", "title": "💵 InnBucks"}
+                {"id": "pay_ecocash", "title": " EcoCash"},
+                {"id": "pay_onemoney", "title": " OneMoney"},
+                {"id": "pay_innbucks", "title": " InnBucks"}
             ],
-            header="💳 Payment Method"
+            header=" Payment Method"
         )
     
     def send_currency_selection(self, to: str) -> Dict:
@@ -262,10 +262,10 @@ class EnhancedWhatsApp:
             to=to,
             body="Which currency would you like to use?",
             buttons=[
-                {"id": "currency_usd", "title": "🇺🇸 USD"},
-                {"id": "currency_zwg", "title": "🇿🇼 ZWG"}
+                {"id": "currency_usd", "title": " USD"},
+                {"id": "currency_zwg", "title": " ZWG"}
             ],
-            header="💱 Select Currency"
+            header=" Select Currency"
         )
     
     def send_confirmation(self, to: str, summary: str) -> Dict:
@@ -274,11 +274,11 @@ class EnhancedWhatsApp:
             to=to,
             body=summary,
             buttons=[
-                {"id": "confirm_yes", "title": "✅ Confirm"},
-                {"id": "confirm_edit", "title": "✏️ Edit"},
-                {"id": "confirm_cancel", "title": "❌ Cancel"}
+                {"id": "confirm_yes", "title": " Confirm"},
+                {"id": "confirm_edit", "title": "️ Edit"},
+                {"id": "confirm_cancel", "title": " Cancel"}
             ],
-            header="📋 Confirm Payment"
+            header=" Confirm Payment"
         )
     
     def send_quick_donate_offer(self, to: str, profile_summary: str, show_logo: bool = True) -> Dict:
@@ -287,12 +287,12 @@ class EnhancedWhatsApp:
             to=to,
             body=profile_summary,
             buttons=[
-                {"id": "quick_yes", "title": "⚡ Quick Donate"},
-                {"id": "quick_new", "title": "🏛️ Diff. Congregation"},
-                {"id": "quick_help", "title": "❓ Help"}
+                {"id": "quick_yes", "title": " Quick Donate"},
+                {"id": "quick_new", "title": "️ Diff. Congregation"},
+                {"id": "quick_help", "title": " Help"}
             ],
             header_image_url=self.LOGO_URL if show_logo else None,
-            header=None if show_logo else "⚡ Welcome Back!"
+            header=None if show_logo else " Welcome Back!"
         )
     
     # ========================================================================
