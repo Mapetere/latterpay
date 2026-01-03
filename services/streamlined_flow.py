@@ -214,13 +214,28 @@ class StreamlinedFlow:
             return self._handle_cancel(phone)
         if msg_lower in ["help", "?", "action_help", "quick_help"]:
             return self._send_help(phone)
-        if msg_lower in ["check", "status"]:
+        if msg_lower in ["check", "status", "check_again"]:
             return self._handle_check_status(phone, session)
-        if msg_lower == "menu":
+        if msg_lower in ["menu", "start_over"]:
             # Reset session and show smart menu
             delete_session(phone)
             session = {"step": "start", "data": {}}
             return self._handle_start(phone, message, session)
+        if msg_lower == "retry_payment":
+            # Retry payment - go back to phone number step
+            if session.get("data", {}).get("payment_method"):
+                session["step"] = "awaiting_phone_number"
+                session["poll_url"] = None  # Clear old poll_url
+                save_session(phone, session["step"], session["data"])
+                method = session["data"].get("payment_method", "EcoCash")
+                whatsapp.send_message(
+                    f"Let's try again!\n\nEnter your *{method}* number:\n_Format: 0771234567_",
+                    phone
+                )
+                return "retry_payment"
+            else:
+                delete_session(phone)
+                return self._handle_start(phone, message, {"step": "start", "data": {}})
         
         # Route to appropriate handler
         handler_map = {
@@ -1141,53 +1156,88 @@ class StreamlinedFlow:
     
     def _handle_check_status(self, phone: str, session: Dict) -> str:
         """Handle payment status check."""
-        # Check if there's a pending payment in session
+        # Check both places where poll_url might be stored
+        poll_url = session.get("poll_url") or session.get("data", {}).get("poll_url")
         data = session.get("data", {})
         
-        if data.get("poll_url"):
+        if poll_url:
             # There's a pending payment - check its status
             try:
-                from services.paynow_integration import check_payment_status
-                status = check_payment_status(data.get("poll_url"))
+                from services.config import paynow_config
+                from paynow import Paynow
                 
-                if status and status.get("status") == "Paid":
+                currency = data.get("currency", "ZWG")
+                int_id, int_key = paynow_config.get_integration(currency)
+                paynow_client = Paynow(int_id, int_key, paynow_config.return_url, paynow_config.result_url)
+                
+                status_obj = paynow_client.check_transaction_status(poll_url)
+                status = status_obj.status.lower() if status_obj else "unknown"
+                
+                if status == "paid":
                     whatsapp.send_message(
                         "Payment confirmed!\n\n"
-                        f"Amount: {data.get('currency', 'ZWG')}${data.get('amount', 0):.2f}\n"
+                        f"Amount: {data.get('currency', 'ZWG')}${float(data.get('amount', 0)):.2f}\n"
                         f"Purpose: {data.get('donation_type', 'Donation')}\n\n"
                         "Thank you for your contribution!",
                         phone
                     )
                     delete_session(phone)
                     return "payment_confirmed"
-                elif status and status.get("status") in ["Sent", "Pending"]:
-                    whatsapp.send_message(
-                        "Payment is still pending.\n\n"
-                        "Please complete the payment on your phone, then type *check* again.",
-                        phone
+                    
+                elif status in ["sent", "pending", "awaiting delivery"]:
+                    enhanced_whatsapp.send_interactive_buttons(
+                        to=phone,
+                        body="Payment is still pending.\n\nPlease approve the payment on your phone.",
+                        buttons=[
+                            {"id": "check_again", "title": "Check Again"},
+                            {"id": "retry_payment", "title": "Retry Payment"},
+                            {"id": "start_over", "title": "Start Over"}
+                        ],
+                        header="Payment Pending"
                     )
                     return "payment_pending"
+                    
+                elif status in ["cancelled", "failed"]:
+                    enhanced_whatsapp.send_interactive_buttons(
+                        to=phone,
+                        body=f"Payment {status}.\n\nWould you like to try again?",
+                        buttons=[
+                            {"id": "retry_payment", "title": "Retry Payment"},
+                            {"id": "start_over", "title": "Start Over"}
+                        ],
+                        header="Payment Failed"
+                    )
+                    return "payment_failed"
                 else:
                     whatsapp.send_message(
-                        f"Payment status: {status.get('status', 'Unknown')}\n\n"
-                        "Please try again or type *menu* to start over.",
+                        f"Payment status: {status}\n\n"
+                        "Type *check* again or *menu* to start over.",
                         phone
                     )
                     return "payment_status_unknown"
+                    
             except Exception as e:
                 logger.error(f"Failed to check payment status: {e}")
-                whatsapp.send_message(
-                    "Could not check payment status.\n"
-                    "Please try again in a moment.",
-                    phone
+                enhanced_whatsapp.send_interactive_buttons(
+                    to=phone,
+                    body="Could not check payment status.\n\nWhat would you like to do?",
+                    buttons=[
+                        {"id": "check_again", "title": "Try Again"},
+                        {"id": "start_over", "title": "Start Over"}
+                    ],
+                    header="Error"
                 )
                 return "status_check_failed"
         else:
             # No pending payment
-            whatsapp.send_message(
-                "No pending payments found.\n\n"
-                "Type *menu* to start a new donation.",
-                phone
+            enhanced_whatsapp.send_interactive_buttons(
+                to=phone,
+                body="No pending payments found.",
+                buttons=[
+                    {"id": "action_donate", "title": "Make Donation"},
+                    {"id": "action_help", "title": "Help"}
+                ],
+                header="No Payments"
             )
             return "no_pending_payment"
     
