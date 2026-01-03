@@ -30,6 +30,16 @@ from services.sessions import (
 )
 from services.config import donation_config, admin_config
 
+# AI-powered NLU (uses OpenAI with regex fallback)
+try:
+    from services.ai_nlu import smart_extract, to_session_entities, OPENAI_ENABLED
+    AI_NLU_AVAILABLE = True
+    logger.info(f"AI NLU loaded. OpenAI enabled: {OPENAI_ENABLED}")
+except ImportError:
+    AI_NLU_AVAILABLE = False
+    OPENAI_ENABLED = False
+    logger.warning("AI NLU not available, using regex only")
+
 logger = logging.getLogger(__name__)
 
 
@@ -273,12 +283,19 @@ class StreamlinedFlow:
             return self._send_help(phone)
         
         else:
-            # Try NLU to understand the message
-            parsed = self.nlu.parse(message)
+            # Try AI NLU first, fall back to regex
+            if AI_NLU_AVAILABLE:
+                extraction = smart_extract(message)
+                entities = to_session_entities(extraction)
+                intent = extraction.intent
+            else:
+                parsed = self.nlu.parse(message)
+                entities = parsed.entities
+                intent = parsed.intent
             
-            if parsed.intent == "donate" or parsed.entities.get("amount"):
+            if intent == "donate" or entities.get("amount") or entities.get("donation_type"):
                 # They mentioned donating or an amount
-                session["data"].update(parsed.entities)
+                session["data"].update(entities)
                 
                 # Check what we have and what we need
                 has_name = session["data"].get("name")
@@ -354,20 +371,30 @@ class StreamlinedFlow:
     # ========================================================================
     
     def _handle_collect_info(self, phone: str, message: str, session: Dict) -> str:
-        """Handle combined name + congregation collection with NLU support."""
-        # First, try NLU to see if user is giving us donation info instead of name
-        parsed = self.nlu.parse(message)
+        """Handle combined name + congregation collection with AI NLU support."""
+        # First, try AI NLU to see if user is giving us donation info instead of name
+        if AI_NLU_AVAILABLE:
+            extraction = smart_extract(message)
+            entities = to_session_entities(extraction)
+        else:
+            parsed = self.nlu.parse(message)
+            entities = parsed.entities
         
         # Check if they gave us an amount or purpose instead of name/congregation
-        if parsed.entities.get("amount") or parsed.entities.get("donation_type"):
+        if entities.get("amount") or entities.get("donation_type"):
             # User said something like "donate 50 for conference"
             # Extract what we can and merge into session
-            if parsed.entities.get("amount"):
-                session["data"]["amount"] = parsed.entities["amount"]
-            if parsed.entities.get("donation_type"):
-                session["data"]["donation_type"] = parsed.entities["donation_type"]
-            if parsed.entities.get("currency"):
-                session["data"]["currency"] = parsed.entities["currency"]
+            if entities.get("amount"):
+                session["data"]["amount"] = entities["amount"]
+            if entities.get("donation_type"):
+                session["data"]["donation_type"] = entities["donation_type"]
+            if entities.get("currency"):
+                session["data"]["currency"] = entities["currency"]
+            # AI can also extract name and congregation!
+            if entities.get("name"):
+                session["data"]["name"] = entities["name"]
+            if entities.get("region"):
+                session["data"]["region"] = entities["region"]
             
             # Check what's still missing
             has_name = session.get("data", {}).get("name")
