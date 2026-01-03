@@ -361,10 +361,17 @@ def handle_payment_number_step(phone, msg, session):
             session["poll_url"] = poll_url
             
             save_session(phone, session["step"], session["data"])
-            whatsapp.send_message(
-                "✅ Payment request sent!\n"
-                "Approve the payment on your phone and type *check* to confirm.",
-                phone
+            
+            # Send interactive buttons instead of asking to type 'check'
+            from services.enhanced_whatsapp import enhanced_whatsapp
+            enhanced_whatsapp.send_interactive_buttons(
+                to=phone,
+                body="Payment request sent!\n\nApprove the payment on your phone, then tap below to confirm.",
+                buttons=[
+                    {"id": "check_again", "title": "Check Status"},
+                    {"id": "retry_payment", "title": "Retry Payment"}
+                ],
+                header="Payment Sent"
             )
             
             threading.Thread(target=poll_payment_status, args=(phone, poll_url, paynow)).start()
