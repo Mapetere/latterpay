@@ -1208,9 +1208,25 @@ class StreamlinedFlow:
                     return "payment_pending"
                     
                 elif status in ["cancelled", "failed"]:
+                    # Get detailed error message from Paynow if available
+                    error_detail = ""
+                    if hasattr(status_obj, 'error'):
+                        error_detail = f"\n\nReason: {status_obj.error}"
+                    elif hasattr(status_obj, 'paynow_reference'):
+                        error_detail = f"\n\nRef: {status_obj.paynow_reference}"
+                    
+                    # Check for common errors in the status info
+                    status_str = str(status_obj.__dict__) if status_obj else ""
+                    if "insufficient" in status_str.lower():
+                        error_detail = "\n\nReason: Insufficient funds"
+                    elif "declined" in status_str.lower():
+                        error_detail = "\n\nReason: Transaction declined"
+                    elif "timeout" in status_str.lower():
+                        error_detail = "\n\nReason: Transaction timed out"
+                    
                     enhanced_whatsapp.send_interactive_buttons(
                         to=phone,
-                        body=f"Payment {status}.\n\nWould you like to try again?",
+                        body=f"Payment {status.title()}{error_detail}\n\nWould you like to try again?",
                         buttons=[
                             {"id": "retry_payment", "title": "Retry Payment"},
                             {"id": "start_over", "title": "Start Over"}

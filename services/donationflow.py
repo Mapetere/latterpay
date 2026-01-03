@@ -362,14 +362,13 @@ def handle_payment_number_step(phone, msg, session):
             
             save_session(phone, session["step"], session["data"])
             
-            # Send interactive buttons instead of asking to type 'check'
+            # Send interactive button - only Check Status (retry comes after checking)
             from services.enhanced_whatsapp import enhanced_whatsapp
             enhanced_whatsapp.send_interactive_buttons(
                 to=phone,
                 body="Payment request sent!\n\nApprove the payment on your phone, then tap below to confirm.",
                 buttons=[
-                    {"id": "check_again", "title": "Check Status"},
-                    {"id": "retry_payment", "title": "Retry Payment"}
+                    {"id": "check_again", "title": "Check Status"}
                 ],
                 header="Payment Sent"
             )
