@@ -201,14 +201,15 @@ def handle_payment_number_step(phone, msg, session):
 
     def poll_payment_status(phone, poll_url, paynow):
         """Background thread to poll payment status and notify user on completion."""
-        # Initial wait to give user time to see the first message and interact with their phone
-        time.sleep(10)
+        # Short initial wait - payment failures often happen quickly
+        time.sleep(3)
         
-        for _ in range(40):  # poll for ~200 seconds
+        for i in range(60):  # poll for ~180 seconds (3s intervals)
             try:
                 # Check if session still exists (user might have cancelled or manually checked)
                 session = load_session(phone)
-                if not session or session.get("poll_url") != poll_url:
+                poll_url_in_data = session.get("data", {}).get("poll_url") if session else None
+                if not session or (session.get("poll_url") != poll_url and poll_url_in_data != poll_url):
                     logger.debug(f"Background polling stopped for {phone} - session changed or cleared.")
                     return
 
@@ -239,22 +240,41 @@ def handle_payment_number_step(phone, msg, session):
                     return
 
                 elif status in ["cancelled", "failed"]:
-                    warning_msg = "⚠️ *Payment Cancelled*" if status == "cancelled" else "❌ *Payment Failed*"
-                    whatsapp.send_message(
-                        f"{warning_msg}\n\n"
-                        f"The transaction was {status}. You can try again by entering your mobile number or type *cancel*.",
-                        phone
+                    # Send interactive buttons for immediate retry
+                    from services.enhanced_whatsapp import enhanced_whatsapp
+                    
+                    # Get error details if available
+                    error_detail = ""
+                    if hasattr(status_obj, 'error') and status_obj.error:
+                        error_detail = f"\n\nReason: {status_obj.error}"
+                    elif hasattr(status_obj, 'paynow_reference'):
+                        error_detail = f"\n\nRef: {status_obj.paynow_reference}"
+                    
+                    header = "Payment Cancelled" if status == "cancelled" else "Payment Failed"
+                    
+                    enhanced_whatsapp.send_interactive_buttons(
+                        to=phone,
+                        body=f"The transaction was {status}.{error_detail}\n\nWould you like to try again?",
+                        buttons=[
+                            {"id": "retry_payment", "title": "Retry Payment"},
+                            {"id": "start_over", "title": "Start Over"}
+                        ],
+                        header=header
                     )
+                    
                     # Clear poll_url to allow retry
+                    if session.get("data"):
+                        session["data"]["poll_url"] = None
                     session["poll_url"] = None
-                    save_session(phone, session["step"], session["data"])
+                    save_session(phone, session["step"], session.get("data", {}))
                     return
 
-                time.sleep(5)
+                # Faster polling - 3 seconds
+                time.sleep(3)
                 
             except Exception as e:
                 logger.error(f"Error in background polling for {phone}: {e}")
-                time.sleep(10)
+                time.sleep(5)
 
 
     raw = msg.strip().lower()
