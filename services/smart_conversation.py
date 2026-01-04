@@ -78,6 +78,9 @@ class UserMemory:
         import os
         
         DATABASE_URL = os.getenv("DATABASE_URL")
+        logger.info(f"DATABASE_URL found: {bool(DATABASE_URL)}")
+        if DATABASE_URL:
+            logger.info(f"DATABASE_URL starts with: {DATABASE_URL[:30]}...")
         
         if DATABASE_URL:
             try:
@@ -91,7 +94,7 @@ class UserMemory:
                 
                 self.pg_pool = psycopg2.pool.ThreadedConnectionPool(1, 5, db_url)
                 self.use_postgres = True
-                logger.info("UserMemory: Using PostgreSQL")
+                logger.info("UserMemory: Successfully connected to PostgreSQL")
                 
                 # Ensure table exists
                 conn = self.pg_pool.getconn()
