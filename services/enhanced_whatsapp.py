@@ -423,7 +423,7 @@ class EnhancedWhatsApp:
             body=profile_summary,
             buttons=[
                 {"id": "quick_yes", "title": " Quick Donate"},
-                {"id": "quick_new", "title": "️ Diff. Congregation"},
+                {"id": "edit_details", "title": "Edit Details"},
                 {"id": "quick_help", "title": " Help"}
             ],
             header_image_url=self.LOGO_URL if show_logo else None,
