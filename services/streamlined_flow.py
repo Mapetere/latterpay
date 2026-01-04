@@ -334,7 +334,45 @@ class StreamlinedFlow:
                 )
                 return "name_prompt_sent"
         
-        elif msg in ["quick_new", "new"]:
+        elif msg == "edit_details":
+            # User wants to edit their saved details - show options
+            enhanced_whatsapp.send_interactive_list(
+                to=phone,
+                body="What would you like to update?",
+                button_text="Choose Option",
+                sections=[{
+                    "title": "Edit Options",
+                    "rows": [
+                        {"id": "edit_name", "title": "Edit Name", "description": "Change your name"},
+                        {"id": "edit_congregation", "title": "Edit Congregation", "description": "Change your congregation"},
+                        {"id": "edit_all", "title": "Start Fresh", "description": "Re-enter all details"}
+                    ]
+                }],
+                header="Edit Details"
+            )
+            return "edit_options_sent"
+        
+        elif msg == "edit_name":
+            # User wants to edit just their name
+            session["step"] = "awaiting_name"
+            session["data"] = session.get("data", {})
+            save_session(phone, session["step"], session["data"])
+            whatsapp.send_message(
+                "Enter your new name:\n\n"
+                "_Example: John Moyo_",
+                phone
+            )
+            return "name_edit_prompt"
+            
+        elif msg == "edit_congregation":
+            # User wants to edit just congregation
+            session["step"] = "awaiting_province"
+            session["data"] = session.get("data", {})
+            save_session(phone, session["step"], session["data"])
+            enhanced_whatsapp.send_congregation_list(phone)
+            return "congregation_edit_prompt"
+            
+        elif msg in ["edit_all", "quick_new", "new"]:
             # User wants to donate from a DIFFERENT congregation
             # Keep name but ask for new congregation
             saved_name = session.get("data", {}).get("name", "")
