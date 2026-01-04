@@ -490,7 +490,7 @@ class SmartConversation:
             
             # For returning users: Happy New Year REPLACES the time greeting during Jan 1-20
             if is_new_year_period:
-                main_greeting = f"Happy New Year {name}!"
+                main_greeting = f"🎉 Happy New Year {name}!"
             else:
                 main_greeting = f"{time_greeting} {name}!"
             
