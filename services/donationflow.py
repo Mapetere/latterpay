@@ -356,9 +356,12 @@ def handle_payment_number_step(phone, msg, session):
             whatsapp.send_message("❌ Payment request failed. Please try again.", phone)
             return "ok"
 
+
         if hasattr(response, "success") and response.success:
             poll_url = response.poll_url
-            session["poll_url"] = poll_url
+            # IMPORTANT: Save poll_url inside data so it persists!
+            session["data"]["poll_url"] = poll_url
+            session["poll_url"] = poll_url  # Keep for background thread
             
             save_session(phone, session["step"], session["data"])
             
