@@ -464,7 +464,12 @@ class SmartConversation:
     def get_personalized_greeting(self, phone: str) -> Tuple[str, Optional[UserProfile]]:
         """Generate a personalized greeting based on user history and time."""
         profile = self.memory.get_profile(phone)
-        hour = datetime.now().hour
+        
+        # Use Zimbabwe timezone (UTC+2)
+        from datetime import timezone, timedelta
+        zim_tz = timezone(timedelta(hours=2))
+        now = datetime.now(zim_tz)
+        hour = now.hour
         
         # Time-based greeting
         if 5 <= hour < 12:
@@ -477,7 +482,6 @@ class SmartConversation:
             time_greeting = "Hello"
         
         # Special seasonal greetings
-        now = datetime.now()
         is_new_year_period = now.month == 1 and now.day <= 20
         
         if profile and profile.name:
