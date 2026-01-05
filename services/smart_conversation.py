@@ -9,7 +9,7 @@ AI-powered conversation handling with:
 - Intent detection
 
 Author: Nyasha Mapetere
-Version: 3.0.0
+Version: 3.1.0
 """
 
 import re
