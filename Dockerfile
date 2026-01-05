@@ -34,7 +34,7 @@ FROM python:3.11-slim as production
 
 # Labels
 LABEL maintainer="Nyasha Mapetere <mapeterenyasha@gmail.com>" \
-    version="2.0.0" \
+    version="2.1.0" \
     description="LatterPay WhatsApp Payment Service"
 
 # Set environment variables
