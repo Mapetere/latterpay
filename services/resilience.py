@@ -6,6 +6,9 @@ Production-grade resilience patterns for robust error handling:
 - Rate Limiter: Protects against abuse
 - Retry with Exponential Backoff: Resilient external calls
 - Request validation and sanitization
+
+Author: Nyasha Mapetere
+Version: 1.0.0
 """
 
 
