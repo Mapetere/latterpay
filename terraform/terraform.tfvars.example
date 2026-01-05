@@ -1,0 +1,27 @@
+# =============================================================================
+# LatterPay Terraform Example Variables
+# =============================================================================
+# Copy this file to terraform.tfvars and fill in your values
+# NEVER commit terraform.tfvars to version control
+# =============================================================================
+
+railway_token     = "your-railway-api-token"
+postgres_password = "secure-database-password"
+
+# WhatsApp
+whatsapp_token  = "your-whatsapp-api-token"
+phone_number_id = "your-phone-number-id"
+verify_token    = "your-webhook-verify-token"
+
+# Paynow
+paynow_zwg_id  = "your-zwg-integration-id"
+paynow_zwg_key = "your-zwg-integration-key"
+paynow_usd_id  = "your-usd-integration-id"
+paynow_usd_key = "your-usd-integration-key"
+
+# Admin
+admin_phone   = "263771234567"
+finance_phone = "263771234568"
+
+# Optional
+openai_api_key = ""
