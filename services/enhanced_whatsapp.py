@@ -9,7 +9,7 @@ Extended WhatsApp service that supports:
 - Voice note transcription (future)
 
 Author: Nyasha Mapetere
-Version: 3.0.0
+Version: 3.1.0
 """
 
 import os
