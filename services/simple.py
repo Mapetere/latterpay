@@ -4,7 +4,7 @@ Simple Paynow Integration Module for LatterPay
 Provides simplified Paynow payment functions.
 
 Author: Nyasha Mapetere
-Version: 2.0.0
+Version: 2.1.0
 """
 
 from paynow import Paynow
