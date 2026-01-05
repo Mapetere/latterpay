@@ -5,7 +5,7 @@ Tracks payment history, generates analytics, and provides
 reporting capabilities for donors and administrators.
 
 Author: Nyasha Mapetere
-Version: 2.0.0
+Version: 2.1.0
 """
 
 import logging
