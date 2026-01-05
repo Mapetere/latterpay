@@ -9,7 +9,7 @@ A modern, streamlined conversation handler that:
 - Provides personalized experiences
 
 Author: Nyasha Praise Mapetere
-Version: 3.0.0
+Version: 3.1.0
 """
 
 import logging
