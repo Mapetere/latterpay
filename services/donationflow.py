@@ -1,4 +1,13 @@
-# services/donation_flow.py
+"""
+Donation Flow Handler for LatterPay
+=====================================
+Handles the complete donation flow including payment processing,
+mobile money integration, and status tracking.
+
+Author: Nyasha Mapetere
+Version: 3.0.0
+"""
+
 from datetime import datetime
 import json
 import os
