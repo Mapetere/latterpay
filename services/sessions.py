@@ -8,7 +8,7 @@ Handles user session lifecycle with:
 - Connection pooling integration
 
 Author: Nyasha Mapetere
-Version: 2.0.0
+Version: 2.1.0
 """
 
 from datetime import datetime, timedelta
