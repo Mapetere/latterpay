@@ -1,4 +1,4 @@
-# 💳 LatterPay - WhatsApp Payment Service
+# LatterPay - WhatsApp Payment Service
 
 [![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/Mapetere/latterpay)
 [![Python](https://img.shields.io/badge/python-3.9+-green.svg)](https://python.org)
@@ -8,33 +8,33 @@
 
 ![LatterPay Banner](images/latterlogo.png)
 
-## 🌟 Features
+## Features
 
 ### Core Functionality
-- 📱 **WhatsApp Integration** - Full WhatsApp Business API integration via Pygwan
-- 💳 **Payment Processing** - Paynow integration for EcoCash, OneMoney, TeleCash, and USD
-- 🔐 **End-to-End Encryption** - Meta Flow encryption with AES-256-CBC and RSA
-- 📝 **Registration Flow** - Volunteer and donor registration with skill tracking
+- **WhatsApp Integration** - Full WhatsApp Business API integration via Pygwan
+- **Payment Processing** - Paynow integration for EcoCash, OneMoney, TeleCash, and USD
+- **End-to-End Encryption** - Meta Flow encryption with AES-256-CBC and RSA
+- **Registration Flow** - Volunteer and donor registration with skill tracking
 
 ### Resilience & Reliability
-- 🔄 **Circuit Breaker** - Prevents cascading failures when services are down
-- ⏱️ **Rate Limiting** - Token bucket algorithm protects against abuse
-- 🔁 **Retry with Backoff** - Exponential backoff for failed external calls
-- 🏥 **Health Checks** - `/health` endpoint for monitoring
+- **Circuit Breaker** - Prevents cascading failures when services are down
+- **Rate Limiting** - Token bucket algorithm protects against abuse
+- **Retry with Backoff** - Exponential backoff for failed external calls
+- **Health Checks** - `/health` endpoint for monitoring
 
 ### Security
-- 🛡️ **Input Validation** - XSS and SQL injection prevention
-- ✅ **Webhook Signature Verification** - Meta and Paynow signature validation
-- 🚫 **Request Throttling** - IP-based rate limiting
-- 🔒 **Secure Sessions** - Database-backed session management
+- **Input Validation** - XSS and SQL injection prevention
+- **Webhook Signature Verification** - Meta and Paynow signature validation
+- **Request Throttling** - IP-based rate limiting
+- **Secure Sessions** - Database-backed session management
 
 ### Observability
-- 📊 **Metrics Endpoint** - `/metrics` for request/error statistics
-- 📝 **Structured Logging** - Request ID tracing with rotating log files
-- 📈 **Payment Analytics** - Daily reports and transaction statistics
-- 🔍 **Audit Trail** - Complete payment history tracking
+- **Metrics Endpoint** - `/metrics` for request/error statistics
+- **Structured Logging** - Request ID tracing with rotating log files
+- **Payment Analytics** - Daily reports and transaction statistics
+- **Audit Trail** - Complete payment history tracking
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Python 3.9+
@@ -105,7 +105,7 @@ python app.py
 gunicorn app:latterpay --bind 0.0.0.0:8010
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 latterpay/
@@ -113,8 +113,10 @@ latterpay/
 ├── requirements.txt            # Python dependencies
 ├── Dockerfile                  # Docker configuration
 ├── Procfile                    # Railway/Heroku process file
-├── private.pem                 # RSA private key (for encryption)
-├── public.pem                  # RSA public key
+├── terraform/                  # Infrastructure as Code
+│   ├── main.tf
+│   ├── variables.tf
+│   └── outputs.tf
 ├── services/
 │   ├── __init__.py
 │   ├── config.py              # Configuration management
@@ -137,7 +139,7 @@ latterpay/
 └── logs/                       # Application logs
 ```
 
-## 🔌 API Endpoints
+## API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -149,7 +151,7 @@ latterpay/
 | `/payment-return` | GET | Paynow payment return page |
 | `/payment-result` | POST | Paynow IPN handler |
 
-## 💬 User Commands
+## User Commands
 
 Users can interact with the bot using these commands:
 
@@ -173,7 +175,7 @@ Admin users have access to additional commands:
 | `/approve [id]` | Approve a transaction |
 | `/stats` | View system statistics |
 
-## 🏗️ Architecture
+## Architecture
 
 ### Resilience Patterns
 
@@ -211,7 +213,7 @@ WhatsApp → Webhook → Validation → Session Check → Flow Handler → Respo
          Verification           Session           Registration
 ```
 
-## 🔧 Configuration
+## Configuration
 
 ### Feature Flags
 
@@ -234,7 +236,7 @@ max_amount: float = 480.0   # Maximum per transaction
 min_amount: float = 1.0     # Minimum per transaction
 ```
 
-## 📊 Monitoring
+## Monitoring
 
 ### Health Check Response
 
@@ -256,7 +258,7 @@ min_amount: float = 1.0     # Minimum per transaction
 }
 ```
 
-## 🚢 Deployment
+## Deployment
 
 ### Railway
 
@@ -279,6 +281,15 @@ docker build -t latterpay .
 docker run -p 8010:8010 --env-file .env latterpay
 ```
 
+### Terraform
+
+```bash
+cd terraform
+terraform init
+terraform plan
+terraform apply
+```
+
 ### Heroku
 
 ```bash
@@ -287,7 +298,7 @@ heroku config:set $(cat .env | xargs)
 git push heroku Dev:main
 ```
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run syntax checks
@@ -298,7 +309,7 @@ python -m py_compile services/*.py
 DEBUG=true python app.py
 ```
 
-## 📝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -306,25 +317,24 @@ DEBUG=true python app.py
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 👨‍💻 Author
+## Author
 
 **Nyasha Mapetere**
 - Email: mapeterenyasha@gmail.com
 - GitHub: [@Mapetere](https://github.com/Mapetere)
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - [Pygwan](https://github.com/pygwan) - WhatsApp API wrapper
 - [Paynow](https://paynow.co.zw) - Payment gateway
 - [Flask](https://flask.palletsprojects.com/) - Web framework
-- Runde Rural Clinic Project - Inspiration
 
 ---
 
 <p align="center">
-  Made with ❤️ for the Runde Rural Clinic Project
+  Made with love
 </p>
