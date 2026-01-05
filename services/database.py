@@ -5,7 +5,7 @@ Handles database connections with automatic fallback to SQLite.
 Supports both PostgreSQL (production) and SQLite (development).
 
 Author: Nyasha Mapetere
-Version: 1.0.0
+Version: 1.1.0
 """
 
 import os
